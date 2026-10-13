@@ -124,6 +124,9 @@ async function apiGet(): Promise<{ callUps: StoredCallUp[]; sessions: StoredSess
 async function apiPost(action: "upsert" | "delete", entity: "callup" | "session" | "response", data: object) {
   const res = await fetch(getAppsScriptUrl(), {
     method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
     body: JSON.stringify({ action, entity, data }),
   });
   if (!res.ok) throw new Error(`Apps Script POST falló: HTTP ${res.status}`);
