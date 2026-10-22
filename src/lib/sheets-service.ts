@@ -11,7 +11,7 @@
  */
 
 import { parseToIsoDate } from "./date-utils";
-import { getSheetsCsvUrl } from "./config";
+import { getSheetsCsvUrl, getAppsScriptUrl } from "./config";
 
 export interface FormResponse {
   timestamp: string;  // raw "Marca temporal"
@@ -109,6 +109,30 @@ export async function fetchFormResponses(forceRefresh = false): Promise<FormResp
   }
 
   try {
+    // 1. Preferred: responses served by the Apps Script (same Sheet as call-ups/sessions)
+    try {
+      const res = await fetch(getAppsScriptUrl(), { cache: "no-cache" });
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.responses)) {
+          _cache = (json.responses as FormResponse[])
+            .map((r) => ({
+              timestamp: String(r.timestamp ?? ""),
+              jugador: String(r.jugador ?? "").trim(),
+              fatigue: Math.max(0, Math.min(10, Math.round(Number(r.fatigue) || 0))),
+              rpe: Math.max(0, Math.min(10, Math.round(Number(r.rpe) || 0))),
+              fecha: parseDate(String(r.fecha ?? "")),
+            }))
+            .filter((r) => r.jugador && r.fecha);
+          _cacheAt = Date.now();
+          return _cache;
+        }
+      }
+    } catch (e) {
+      console.warn("[sheets-service] Apps Script responses unavailable, trying CSV:", e);
+    }
+
+    // 2. Fallback: published CSV (older Apps Script without `responses`)
     const res = await fetch(url, { cache: "no-cache" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();

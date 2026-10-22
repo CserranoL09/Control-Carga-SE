@@ -213,7 +213,7 @@ export default function Ajustes() {
               URL de la hoja publicada (CSV — para leer respuestas)
             </label>
             <p className="text-xs text-muted-foreground">
-              En Google Sheets → Archivo → Compartir → Publicar en la web → selecciona "Hoja 1" y formato "CSV" → Publicar. Copia la URL resultante.
+              En Google Sheets → Archivo → Compartir → Publicar en la web → selecciona la hoja de respuestas del formulario (por ej. &quot;Respuestas de formulario 1&quot;) y formato &quot;CSV&quot; → Publicar. Copia la URL resultante.
             </p>
             <input
               type="url"
