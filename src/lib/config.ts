@@ -9,7 +9,7 @@ const KEY_SHEETS_CSV = "ignite-sheets-csv-url";
 
 /** Default fallbacks (can be empty — will show an error when called without config) */
 const DEFAULT_APPS_SCRIPT =
-  "https://script.google.com/macros/s/AKfycbytpBPyo5XOSHYmlLw999JJIQJkFt8H2fb-FlWAd0baKOo_iAWieoQ1eMt3UdlTk18XSw/exec";
+  "https://script.google.com/macros/s/AKfycbwsWg1Ic8PwNi1VqKFqNLjF0FsmP_ZKM-1evYrLYVZniZ_-Xv9biwYFxxe1Kr8B_I1OMQ/exec";
 const DEFAULT_SHEETS_CSV =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vRa4rE-Hzk6fKAGlZmxPna-uKQfv-ufd9yxP3U3EmtHWzeuxBDVCyjNTMxJWurqY9JXxDN2zWznbr8C/pub?gid=0&single=true&output=csv";
 
