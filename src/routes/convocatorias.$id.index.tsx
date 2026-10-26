@@ -27,6 +27,9 @@ import { toBlob, toPng } from "html-to-image";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import { PlayerReportPDF } from "@/components/PlayerReportPDF";
+import { MinutosTab } from "@/components/MinutosTab";
+import { formatMinutes, playerMinutesSummary } from "@/lib/minutes";
+import type { StoredMinutes } from "@/lib/store";
 import { players as allPlayers } from "@/lib/mock-data";
 
 const normalizeName = (name: string) =>
@@ -36,7 +39,7 @@ const normalizeName = (name: string) =>
     .trim()
     .toUpperCase();
 
-type Tab = "resumen" | "sesiones" | "fatiga" | "carga" | "jugadores";
+type Tab = "resumen" | "sesiones" | "minutos" | "fatiga" | "carga" | "jugadores";
 
 const tooltipStyle = {
   background: "var(--popover)",
@@ -57,6 +60,8 @@ export default function ConvocatoriaPage() {
     acwrSeriesRpe,
     players,
     playerMetrics,
+    minutes,
+    minutesSupported,
     loading,
     error,
     refresh,
@@ -208,6 +213,7 @@ export default function ConvocatoriaPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "resumen", label: "Resumen" },
     { id: "sesiones", label: "Sesiones" },
+    { id: "minutos", label: "Minutos" },
     { id: "fatiga", label: "Control de Fatiga" },
     { id: "carga", label: "Control de Carga" },
     { id: "jugadores", label: "Jugadores" },
@@ -316,6 +322,16 @@ export default function ConvocatoriaPage() {
                 onChanged={refreshAll}
               />
             )}
+            {tab === "minutos" && callUp && (
+              <MinutosTab
+                callUpId={callUp.id}
+                sessions={sessions}
+                players={players}
+                minutes={minutes}
+                minutesSupported={minutesSupported}
+                onSaved={refreshAll}
+              />
+            )}
             {tab === "fatiga" && (
               <ControlFatigaTab
                 sessionMetrics={filteredSessionMetrics.filter((s) => s.duration > 0)}
@@ -333,6 +349,7 @@ export default function ConvocatoriaPage() {
                 players={players}
                 playerMetrics={filteredPlayerMetrics}
                 sessions={sessions}
+                minutes={minutes}
                 onExportPDF={generatePlayerPDF}
                 exportingPlayer={exportingPlayer}
                 isDisabled={isBulkExporting || exportingPlayer !== null}
@@ -347,6 +364,7 @@ export default function ConvocatoriaPage() {
           callUp={callUp}
           sessions={sessions}
           responses={responses}
+          minutes={minutes}
           optimo={optimo}
           moderado={moderado}
           containerId={`pdf-report-${exportingPlayer.replace(/\s+/g, "-")}`}
@@ -1118,6 +1136,7 @@ function JugadoresTab({
   players,
   playerMetrics,
   sessions,
+  minutes,
   onExportPDF,
   exportingPlayer,
   isDisabled,
@@ -1125,6 +1144,7 @@ function JugadoresTab({
   players: string[];
   playerMetrics: ReturnType<typeof useCallUpDashboard>["playerMetrics"];
   sessions: StoredSession[];
+  minutes: StoredMinutes[];
   onExportPDF: (playerName: string) => Promise<void>;
   exportingPlayer: string | null;
   isDisabled: boolean;
@@ -1148,6 +1168,7 @@ function JugadoresTab({
           <PlayerCard
             key={p.jugador}
             metrics={p}
+            minutes={minutes}
             onExportPDF={onExportPDF}
             isExporting={exportingPlayer === p.jugador}
             isDisabled={isDisabled}
@@ -1160,11 +1181,13 @@ function JugadoresTab({
 
 function PlayerCard({
   metrics: p,
+  minutes,
   onExportPDF,
   isExporting,
   isDisabled,
 }: {
   metrics: ReturnType<typeof useCallUpDashboard>["playerMetrics"][number];
+  minutes: StoredMinutes[];
   onExportPDF: (playerName: string) => Promise<void>;
   isExporting: boolean;
   isDisabled: boolean;
@@ -1178,6 +1201,7 @@ function PlayerCard({
   );
 
   const { id: callUpId } = useParams<{ id: string }>();
+  const mins = playerMinutesSummary(p.jugador, minutes);
 
   return (
     <div className="rounded-lg border bg-card p-4 flex flex-col justify-between h-full">
@@ -1206,6 +1230,8 @@ function PlayerCard({
           <MiniStat label="UA máx" value={p.uaMax.toLocaleString()} color={statusColor(uaSt)} />
           <MiniStat label="Monotonía" value={p.indiceDeMonotonia.toFixed(2)} />
           <MiniStat label="ACWR" value={p.ratioACWR.toFixed(2)} color={statusColor(acwrSt)} />
+          <MiniStat label="Minutos jugados" value={mins.total > 0 ? formatMinutes(mins.total) : "—"} />
+          <MiniStat label="Partidos" value={String(mins.matchesPlayed)} />
         </div>
       </div>
       <div className="border-t pt-3 flex items-center justify-between mt-auto">

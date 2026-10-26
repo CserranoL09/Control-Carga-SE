@@ -91,7 +91,42 @@ function uid(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-async function apiGet(): Promise<{ callUps: StoredCallUp[]; sessions: StoredSession[] }> {
+export interface StoredMinutes {
+  id: string;
+  callUpId: string;
+  sessionId: string;
+  date: string;
+  jugador: string;
+  minutes: number;
+}
+
+/** Sesiones en las que se registran minutos de juego */
+export function isMatchSession(s: StoredSession): boolean {
+  return s.type.includes("PARTIDO");
+}
+
+function normalizePlayerKey(name: string): string {
+  return name.normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toUpperCase();
+}
+
+/** id determinista: una fila por jugador y sesión */
+export function minutesId(sessionId: string, jugador: string): string {
+  return `${sessionId}__${normalizePlayerKey(jugador)}`;
+}
+
+export function samePlayer(a: string, b: string): boolean {
+  return normalizePlayerKey(a) === normalizePlayerKey(b);
+}
+
+interface AllData {
+  callUps: StoredCallUp[];
+  sessions: StoredSession[];
+  minutes: StoredMinutes[];
+  /** false si el Apps Script desplegado todavía no conoce la hoja "Minutos" */
+  minutesSupported: boolean;
+}
+
+async function apiGet(): Promise<AllData> {
   const res = await fetch(getAppsScriptUrl(), { cache: "no-cache" });
   if (!res.ok) throw new Error(`Apps Script GET falló: HTTP ${res.status}`);
   const data = await res.json();
@@ -115,13 +150,20 @@ async function apiGet(): Promise<{ callUps: StoredCallUp[]; sessions: StoredSess
     duration: parseInt(r.duracion, 10) || 0,
   })).filter((s: StoredSession) => !!s.id);
 
-  console.log("Loaded sessions:", sessions);
-  console.log("Loaded call-ups:", callUps);
+  const minutesSupported = Array.isArray(data.minutes);
+  const minutes: StoredMinutes[] = (data.minutes ?? []).map((r: Record<string, string>) => ({
+    id: r.id,
+    callUpId: r.convocatoriaId,
+    sessionId: r.sesionId,
+    date: parseToIsoDate(r.fecha) || r.fecha,
+    jugador: (r.jugador ?? "").trim(),
+    minutes: parseFloat(String(r.minutos).replace(",", ".")) || 0,
+  })).filter((m: StoredMinutes) => !!m.id && !!m.jugador);
 
-  return { callUps, sessions };
+  return { callUps, sessions, minutes, minutesSupported };
 }
 
-async function apiPost(action: "upsert" | "delete", entity: "callup" | "session" | "response", data: object) {
+async function apiPost(action: "upsert" | "delete", entity: "callup" | "session" | "response" | "minutes", data: object) {
   const res = await fetch(getAppsScriptUrl(), {
     method: "POST",
     headers: {
@@ -136,8 +178,30 @@ async function apiPost(action: "upsert" | "delete", entity: "callup" | "session"
 
 // ─── Fetch all data ───────────────────────────────────────────────────────────
 
-export async function fetchAllData(): Promise<{ callUps: StoredCallUp[]; sessions: StoredSession[] }> {
+export async function fetchAllData(): Promise<AllData> {
   return apiGet();
+}
+
+// ─── Minutos de juego ─────────────────────────────────────────────────────────
+
+/**
+ * Guarda en bloque los minutos de una convocatoria.
+ * `minutes: null` borra la fila de ese jugador en esa sesión.
+ */
+export async function saveMinutesBatch(
+  rows: { callUpId: string; session: StoredSession; jugador: string; minutes: number | null }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  await apiPost("upsert", "minutes", {
+    rows: rows.map((r) => ({
+      id: minutesId(r.session.id, r.jugador),
+      convocatoriaId: r.callUpId,
+      sesionId: r.session.id,
+      fecha: r.session.date,
+      jugador: r.jugador.trim(),
+      minutos: r.minutes === null ? "" : String(r.minutes),
+    })),
+  });
 }
 
 // ─── Call-up CRUD ─────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import {
   fetchAllData,
   type StoredCallUp,
   type StoredSession,
+  type StoredMinutes,
 } from "@/lib/store";
 import {
   calcSessionMetrics,
@@ -58,6 +59,8 @@ export interface CallUpDashboard {
   acwrSeriesRpe: ReturnType<typeof calcACWRSeries>;
   players: string[];
   playerMetrics: PlayerCallUpMetrics[];
+  minutes: StoredMinutes[];
+  minutesSupported: boolean;
   loading: boolean;
   error: string | null;
   refresh: () => void;
@@ -67,6 +70,8 @@ export function useCallUpDashboard(callUpId: string | undefined): CallUpDashboar
   const [callUp, setCallUp] = useState<StoredCallUp | undefined>();
   const [sessions, setSessions] = useState<StoredSession[]>([]);
   const [responses, setResponses] = useState<FormResponse[]>([]);
+  const [minutes, setMinutes] = useState<StoredMinutes[]>([]);
+  const [minutesSupported, setMinutesSupported] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,7 +81,7 @@ export function useCallUpDashboard(callUpId: string | undefined): CallUpDashboar
       setError(null);
       try {
         // 1. Obtener convocatorias y sesiones desde Apps Script
-        const { callUps, sessions: allSessions } = await fetchAllData();
+        const { callUps, sessions: allSessions, minutes: allMinutes, minutesSupported: ms } = await fetchAllData();
         const cu = callUpId ? callUps.find((c) => c.id === callUpId) : undefined;
         setCallUp(cu);
 
@@ -84,6 +89,11 @@ export function useCallUpDashboard(callUpId: string | undefined): CallUpDashboar
           .filter((s) => s.callUpId === callUpId)
           .sort((a, b) => a.date.localeCompare(b.date) || a.dayLabel.localeCompare(b.dayLabel));
         setSessions(sess);
+
+        // Minutos de juego: solo los de sesiones de esta convocatoria
+        const sessIds = new Set(sess.map((s) => s.id));
+        setMinutes(allMinutes.filter((m) => sessIds.has(m.sessionId)));
+        setMinutesSupported(ms);
 
         // 2. Obtener respuestas del formulario desde el CSV publicado
         const allResponses = await fetchFormResponses(forceRefresh);
@@ -151,6 +161,8 @@ export function useCallUpDashboard(callUpId: string | undefined): CallUpDashboar
     acwrSeriesRpe,
     players: uniquePlayers,
     playerMetrics,
+    minutes,
+    minutesSupported,
     loading,
     error,
     refresh: () => load(true),

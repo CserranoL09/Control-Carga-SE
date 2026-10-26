@@ -14,6 +14,8 @@ const SS = SpreadsheetApp.getActiveSpreadsheet();
 const SHEET_RESPONSES = "Respuestas de formulario 1"; // Hoja de respuestas del Formulario (ej: "Respuestas de formulario 1" o "Form Responses 1")
 const SHEET_CALLUPS   = "Convocatorias";              // Hoja de convocatorias
 const SHEET_SESSIONS  = "Sesiones";                   // Hoja de sesiones
+const SHEET_MINUTES   = "Minutos";                    // Hoja de minutos de juego (se crea sola)
+const MINUTES_HEADERS = ["id", "convocatoriaId", "sesionId", "fecha", "jugador", "minutos"];
 
 
 // ─── Selector inteligente de la Hoja de Respuestas ────────────
@@ -65,12 +67,14 @@ function getOrCreateSheet(sheetName, defaultHeaders) {
 function doGet(e) {
   const callUps = sheetToObjects(SHEET_CALLUPS);
   const sessions = sheetToObjects(SHEET_SESSIONS);
+  const minutes = sheetToObjects(SHEET_MINUTES);
   const responsesSheet = getResponsesSheet();
 
   const payload = JSON.stringify({
     ok: true,
     callUps,
     sessions,
+    minutes,
     responses: readResponses(responsesSheet),
     responsesSheetName: responsesSheet ? responsesSheet.getName() : null
   });
@@ -113,7 +117,28 @@ function doPost(e) {
     }
   }
 
-  // 2. Manejo de Convocatorias y Sesiones
+  // 2. Minutos de juego (entrada manual desde la app)
+  //    data.rows = [{ id, convocatoriaId, sesionId, fecha, jugador, minutos }]
+  //    Una fila con "minutos" vacío se elimina.
+  if (entity === "minutes") {
+    const sheet = getOrCreateSheet(SHEET_MINUTES, MINUTES_HEADERS);
+    const rows = (data && data.rows) || [];
+    rows.forEach(function (r) {
+      if (!r || !r.id) return;
+      if (r.minutos === "" || r.minutos === null || r.minutos === undefined) {
+        deleteRow(sheet, r.id);
+      } else {
+        upsertRow(sheet, r);
+      }
+    });
+    return jsonResponse({ ok: true, saved: rows.length });
+  }
+
+  if (entity !== "callup" && entity !== "session") {
+    return jsonResponse({ ok: false, error: "Entidad no reconocida: " + entity });
+  }
+
+  // 3. Manejo de Convocatorias y Sesiones
   const sheetName = entity === "callup" ? SHEET_CALLUPS : SHEET_SESSIONS;
   const defaultHeaders = entity === "callup"
     ? ["id", "nombre", "fechaInicio", "fechaFin", "sede", "estado", "notas"]
