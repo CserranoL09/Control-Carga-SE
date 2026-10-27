@@ -1,5 +1,6 @@
 import React from "react";
-import { StoredCallUp, StoredSession } from "@/lib/store";
+import { StoredCallUp, StoredSession, isMatchSession, type StoredMinutes } from "@/lib/store";
+import { formatMinutes, playerMinutesSummary } from "@/lib/minutes";
 import { FormResponse } from "@/lib/sheets-service";
 import { players as allPlayers } from "@/lib/mock-data";
 import { avg, std, calcACWRSeries, acwrStatus, uaStatus } from "@/lib/metrics";
@@ -22,6 +23,7 @@ interface PlayerReportPDFProps {
   callUp: StoredCallUp;
   sessions: StoredSession[];
   responses: FormResponse[];
+  minutes?: StoredMinutes[];
   optimo: number;
   moderado: number;
   containerId: string;
@@ -32,10 +34,13 @@ export function PlayerReportPDF({
   callUp,
   sessions,
   responses,
+  minutes = [],
   optimo,
   moderado,
   containerId,
 }: PlayerReportPDFProps) {
+  const mins = playerMinutesSummary(jugador, minutes);
+  const matchCount = sessions.filter(isMatchSession).length;
   // 1. Sort sessions chronologically by date and dayLabel priority
   const sortedSessions = [...sessions].sort((a, b) => {
     const priority: Record<string, number> = { "M": 1, "M-T": 2, "": 3, "T": 4 };
@@ -98,6 +103,8 @@ export function PlayerReportPDF({
       uaCarga,
       uaFatiga,
       hasResponse: !!r,
+      isMatch: isMatchSession(s),
+      minutesPlayed: mins.bySession[s.id],
     };
   });
 
@@ -298,6 +305,20 @@ export function PlayerReportPDF({
           </div>
           <div style={{ fontSize: "10px", color: "#6b7280", marginTop: "2px" }}>Sesiones completadas</div>
         </div>
+        {matchCount > 0 && (
+          <div style={{ textAlign: "right", borderLeft: "1px solid #e5e7eb", paddingLeft: "24px", minWidth: "120px" }}>
+            <div style={{ fontSize: "10px", color: "#6b7280", textTransform: "uppercase", fontWeight: 600 }}>
+              Minutos Jugados
+            </div>
+            <div style={{ fontSize: "20px", fontWeight: 800, color: "#8c0000", marginTop: "4px" }}>
+              {mins.total > 0 ? formatMinutes(mins.total) : "—"}
+            </div>
+            <div style={{ fontSize: "10px", color: "#6b7280", marginTop: "2px" }}>
+              {mins.matchesPlayed} / {matchCount} partidos
+              {mins.matchesPlayed > 0 ? ` · media ${formatMinutes(mins.average)}` : ""}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* METRICS SUMMARY GRID */}
@@ -430,6 +451,7 @@ export function PlayerReportPDF({
               <th style={{ padding: "8px 10px", fontWeight: 600, color: "#4b5563" }}>Fecha</th>
               <th style={{ padding: "8px 10px", fontWeight: 600, color: "#4b5563" }}>Sesión / Tipo</th>
               <th style={{ padding: "8px 10px", fontWeight: 600, color: "#4b5563", textAlign: "right" }}>Duración</th>
+              <th style={{ padding: "8px 10px", fontWeight: 600, color: "#4b5563", textAlign: "right" }}>Min. jugados</th>
               <th style={{ padding: "8px 10px", fontWeight: 600, color: "#4b5563", textAlign: "center" }}>RPE</th>
               <th style={{ padding: "8px 10px", fontWeight: 600, color: "#4b5563", textAlign: "center" }}>Fatiga</th>
               <th style={{ padding: "8px 10px", fontWeight: 600, color: "#4b5563", textAlign: "right" }}>UA Carga</th>
@@ -450,6 +472,9 @@ export function PlayerReportPDF({
                       {d.dayLabel && <span style={{ fontSize: "8px", backgroundColor: "#f3f4f6", padding: "1px 3px", borderRadius: "3px", marginLeft: "4px", color: "#6b7280" }}>{d.dayLabel}</span>}
                     </td>
                     <td style={{ padding: "8px 10px", textAlign: "right", color: "#9ca3af", fontVariantNumeric: "tabular-nums" }}>{d.duration} min</td>
+                    <td style={{ padding: "8px 10px", textAlign: "right", color: "#9ca3af", fontVariantNumeric: "tabular-nums" }}>
+                      {d.isMatch && d.minutesPlayed !== undefined ? formatMinutes(d.minutesPlayed) : "—"}
+                    </td>
                     <td colSpan={6} style={{ padding: "8px 10px", textAlign: "center", color: "#9ca3af", fontStyle: "italic" }}>
                       Sin respuesta registrada
                     </td>
@@ -465,6 +490,9 @@ export function PlayerReportPDF({
                     {d.dayLabel && <span style={{ fontSize: "8px", backgroundColor: "#f3f4f6", padding: "1px 3px", borderRadius: "3px", marginLeft: "4px", color: "#6b7280" }}>{d.dayLabel}</span>}
                   </td>
                   <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{d.duration} min</td>
+                  <td style={{ padding: "8px 10px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: d.isMatch ? 600 : 400, color: d.isMatch ? "#111827" : "#9ca3af" }}>
+                    {d.isMatch && d.minutesPlayed !== undefined ? formatMinutes(d.minutesPlayed) : "—"}
+                  </td>
                   <td style={{ padding: "8px 10px", textAlign: "center", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{d.rpe}</td>
                   <td style={{ padding: "8px 10px", textAlign: "center", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{d.fatigue}</td>
                   <td
