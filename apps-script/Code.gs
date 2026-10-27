@@ -67,7 +67,7 @@ function getOrCreateSheet(sheetName, defaultHeaders) {
 function doGet(e) {
   const callUps = sheetToObjects(SHEET_CALLUPS);
   const sessions = sheetToObjects(SHEET_SESSIONS);
-  const minutes = sheetToObjects(SHEET_MINUTES);
+  const minutes = readMinutes();
   const responsesSheet = getResponsesSheet();
 
   const payload = JSON.stringify({
@@ -121,14 +121,24 @@ function doPost(e) {
   //    data.rows = [{ id, convocatoriaId, sesionId, fecha, jugador, minutos }]
   //    Una fila con "minutos" vacío se elimina.
   if (entity === "minutes") {
-    const sheet = getOrCreateSheet(SHEET_MINUTES, MINUTES_HEADERS);
+    const sheet = getMinutesSheet();
     const rows = (data && data.rows) || [];
     rows.forEach(function (r) {
       if (!r || !r.id) return;
-      if (r.minutos === "" || r.minutos === null || r.minutos === undefined) {
+      const value = toMinutesNumber(r.minutos);
+      if (value === null) {
         deleteRow(sheet, r.id);
       } else {
-        upsertRow(sheet, r);
+        // Se guarda como NÚMERO: si se guarda como texto, Google Sheets convierte
+        // valores como "15.5" o "12.25" en fechas (15 de mayo, 12 de...)
+        upsertRow(sheet, {
+          id: String(r.id),
+          convocatoriaId: String(r.convocatoriaId || ""),
+          sesionId: String(r.sesionId || ""),
+          fecha: String(r.fecha || ""),
+          jugador: String(r.jugador || ""),
+          minutos: value
+        });
       }
     });
     return jsonResponse({ ok: true, saved: rows.length });
@@ -157,6 +167,61 @@ function doPost(e) {
   }
 
   return jsonResponse({ ok: false, error: "Acción no reconocida: " + action });
+}
+
+
+// ─── Helpers: Minutos de juego ────────────────────────────────
+
+/**
+ * Hoja "Minutos" con formato fijo: columnas A-E como texto (para que Sheets
+ * no convierta ids ni fechas) y columna F (minutos) como número con 2 decimales.
+ */
+function getMinutesSheet() {
+  const sheet = getOrCreateSheet(SHEET_MINUTES, MINUTES_HEADERS);
+  sheet.getRange("A:E").setNumberFormat("@");
+  sheet.getRange("F:F").setNumberFormat("0.00");
+  return sheet;
+}
+
+/** "22,5" | "22.5" | 22.5 → 22.5 ; vacío → null ; valor no válido → null */
+function toMinutesNumber(v) {
+  if (v === "" || v === null || v === undefined) return null;
+  if (v instanceof Date) return null;
+  const n = typeof v === "number" ? v : Number(String(v).replace(",", "."));
+  if (!isFinite(n) || n < 0 || n > 300) return null;
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Lee la hoja Minutos. Las filas cuyo valor de minutos no es válido
+ * (p. ej. celdas que Sheets convirtió en fecha con la versión anterior)
+ * se omiten para que la app las muestre vacías y se puedan volver a introducir.
+ */
+function readMinutes() {
+  const sheet = SS.getSheetByName(SHEET_MINUTES);
+  if (!sheet) return [];
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
+  const headers = values[0].map(String);
+  const col = function (name) { return headers.indexOf(name); };
+  const out = [];
+  for (let i = 1; i < values.length; i++) {
+    const r = values[i];
+    const id = String(r[col("id")] || "");
+    if (!id) continue;
+    const minutos = toMinutesNumber(r[col("minutos")]);
+    if (minutos === null) continue;
+    const fechaRaw = r[col("fecha")];
+    out.push({
+      id: id,
+      convocatoriaId: String(r[col("convocatoriaId")] || ""),
+      sesionId: String(r[col("sesionId")] || ""),
+      fecha: fechaRaw instanceof Date ? parseIsoDate(fechaRaw) : String(fechaRaw || ""),
+      jugador: String(r[col("jugador")] || "").trim(),
+      minutos: minutos
+    });
+  }
+  return out;
 }
 
 

@@ -157,8 +157,10 @@ async function apiGet(): Promise<AllData> {
     sessionId: r.sesionId,
     date: parseToIsoDate(r.fecha) || r.fecha,
     jugador: (r.jugador ?? "").trim(),
-    minutes: parseFloat(String(r.minutos).replace(",", ".")) || 0,
-  })).filter((m: StoredMinutes) => !!m.id && !!m.jugador);
+    minutes: Number(String(r.minutos).replace(",", ".")),
+  })).filter((m: StoredMinutes) =>
+    !!m.id && !!m.jugador && isFinite(m.minutes) && m.minutes >= 0 && m.minutes <= 300,
+  );
 
   return { callUps, sessions, minutes, minutesSupported };
 }
@@ -199,7 +201,8 @@ export async function saveMinutesBatch(
       sesionId: r.session.id,
       fecha: r.session.date,
       jugador: r.jugador.trim(),
-      minutos: r.minutes === null ? "" : String(r.minutes),
+      // Número, no texto: así Google Sheets no lo interpreta como fecha
+      minutos: r.minutes === null ? "" : r.minutes,
     })),
   });
 }
