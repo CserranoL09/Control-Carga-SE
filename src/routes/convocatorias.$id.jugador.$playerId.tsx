@@ -1,3 +1,4 @@
+import { exportElementToPdf } from "@/lib/pdf-export";
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
@@ -215,30 +216,7 @@ export default function Page() {
     }
 
     try {
-      const dataUrl = await toPng(el, {
-        backgroundColor: "#ffffff",
-        style: { transform: "scale(1)", transformOrigin: "top left" },
-        cacheBust: true,
-      });
-
-      const pdf = new jsPDF("p", "mm", "a4");
-      const imgWidth = 210;
-      const pageHeight = 297;
-      const imgHeight = (el.offsetHeight * imgWidth) / el.offsetWidth;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(dataUrl, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(dataUrl, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      pdf.save(`Reporte_Carga_${mockPlayer.name.replace(/\s+/g, "_")}_${callUp.name.replace(/\s+/g, "_")}.pdf`);
+      await exportElementToPdf(el, `Reporte_Carga_${mockPlayer.name.replace(/\s+/g, "_")}_${callUp.name.replace(/\s+/g, "_")}.pdf`);
       toast.success("¡Reporte PDF descargado!");
     } catch (err) {
       console.error(err);

@@ -27,6 +27,7 @@ import { toBlob, toPng } from "html-to-image";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import { PlayerReportPDF } from "@/components/PlayerReportPDF";
+import { exportElementToPdf } from "@/lib/pdf-export";
 import { MinutosTab } from "@/components/MinutosTab";
 import { formatMinutes, playerMinutesSummary } from "@/lib/minutes";
 import type { StoredMinutes } from "@/lib/store";
@@ -98,34 +99,7 @@ export default function ConvocatoriaPage() {
     }
 
     try {
-      const dataUrl = await toPng(el, {
-        backgroundColor: "#ffffff",
-        style: {
-          transform: "scale(1)",
-          transformOrigin: "top left",
-        },
-        cacheBust: true,
-      });
-
-      const pdf = new jsPDF("p", "mm", "a4");
-      const imgWidth = 210;
-      const pageHeight = 297;
-      
-      const imgHeight = (el.offsetHeight * imgWidth) / el.offsetWidth;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(dataUrl, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(dataUrl, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      pdf.save(`Reporte_Carga_${playerName.replace(/\s+/g, "_")}_${callUp?.name.replace(/\s+/g, "_")}.pdf`);
+      await exportElementToPdf(el, `Reporte_Carga_${playerName.replace(/\s+/g, "_")}_${callUp?.name.replace(/\s+/g, "_")}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
       toast.error(`Error al generar el PDF de ${playerName}`);
