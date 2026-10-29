@@ -27,6 +27,8 @@ import { toBlob, toPng } from "html-to-image";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import { PlayerReportPDF } from "@/components/PlayerReportPDF";
+import { exportElementToPdf, renderElementToPdfBlob, downloadBlob } from "@/lib/pdf-export";
+import JSZip from "jszip";
 import { MinutosTab } from "@/components/MinutosTab";
 import { formatMinutes, playerMinutesSummary } from "@/lib/minutes";
 import type { StoredMinutes } from "@/lib/store";
@@ -84,7 +86,14 @@ export default function ConvocatoriaPage() {
     setSessionRefreshKey((k) => k + 1);
   }
 
-  async function generatePlayerPDF(playerName: string): Promise<void> {
+  const safeFileName = (s: string) => s.replace(/\s+/g, "_").replace(/[\\/:*?"<>|]/g, "");
+  const reportFileName = (playerName: string) =>
+    `Reporte_Carga_${safeFileName(playerName)}_${safeFileName(callUp?.name ?? "")}.pdf`;
+
+  /** Genera el PDF de un jugador. Con `asBlob` lo devuelve en vez de descargarlo. */
+  async function generatePlayerPDF(playerName: string): Promise<void>;
+  async function generatePlayerPDF(playerName: string, asBlob: true): Promise<Blob | null>;
+  async function generatePlayerPDF(playerName: string, asBlob = false): Promise<Blob | null | void> {
     setExportingPlayer(playerName);
     // Wait for Recharts SVG to render with animations disabled
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -94,38 +103,12 @@ export default function ConvocatoriaPage() {
     if (!el) {
       toast.error(`No se encontró el contenedor de reporte para ${playerName}`);
       setExportingPlayer(null);
-      return;
+      return asBlob ? null : undefined;
     }
 
     try {
-      const dataUrl = await toPng(el, {
-        backgroundColor: "#ffffff",
-        style: {
-          transform: "scale(1)",
-          transformOrigin: "top left",
-        },
-        cacheBust: true,
-      });
-
-      const pdf = new jsPDF("p", "mm", "a4");
-      const imgWidth = 210;
-      const pageHeight = 297;
-      
-      const imgHeight = (el.offsetHeight * imgWidth) / el.offsetWidth;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(dataUrl, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(dataUrl, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-
-      pdf.save(`Reporte_Carga_${playerName.replace(/\s+/g, "_")}_${callUp?.name.replace(/\s+/g, "_")}.pdf`);
+      if (asBlob) return await renderElementToPdfBlob(el);
+      await exportElementToPdf(el, reportFileName(playerName));
     } catch (error) {
       console.error("Error generating PDF:", error);
       toast.error(`Error al generar el PDF de ${playerName}`);
@@ -145,17 +128,37 @@ export default function ConvocatoriaPage() {
       return;
     }
 
-    const toastId = toast.loading(`Generando reportes PDF: 0 de ${targetPlayers.length}...`);
+    // Un solo jugador: descarga directa del PDF
+    if (targetPlayers.length === 1) {
+      try {
+        await generatePlayerPDF(targetPlayers[0]);
+      } finally {
+        setIsBulkExporting(false);
+      }
+      return;
+    }
+
+    // Varios jugadores: un único ZIP con una carpeta que contiene todos los PDF
+    const folderName = `Informes_${safeFileName(callUp?.name ?? "Convocatoria")}`;
+    const zip = new JSZip();
+    const folder = zip.folder(folderName)!;
+    const toastId = toast.loading(`Generando informes: 0 de ${targetPlayers.length}...`);
 
     try {
+      let ok = 0;
       for (let i = 0; i < targetPlayers.length; i++) {
         const pName = targetPlayers[i];
-        toast.loading(`Generando reporte de ${pName} (${i + 1}/${targetPlayers.length})...`, { id: toastId });
-        await generatePlayerPDF(pName);
-        // Delay to prevent concurrent download issues
-        await new Promise((r) => setTimeout(r, 700));
+        toast.loading(`Generando informe de ${pName} (${i + 1}/${targetPlayers.length})...`, { id: toastId });
+        const blob = await generatePlayerPDF(pName, true);
+        if (blob) {
+          folder.file(reportFileName(pName), blob);
+          ok++;
+        }
       }
-      toast.success("¡Todos los reportes PDF han sido generados con éxito!", { id: toastId });
+      toast.loading("Comprimiendo carpeta...", { id: toastId });
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      downloadBlob(zipBlob, `${folderName}.zip`);
+      toast.success(`Carpeta descargada con ${ok} informes PDF`, { id: toastId });
     } catch (err) {
       console.error("Bulk export error:", err);
       toast.error("Hubo un error durante la exportación masiva", { id: toastId });
