@@ -27,6 +27,7 @@ import { toBlob, toPng } from "html-to-image";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import { PlayerReportPDF } from "@/components/PlayerReportPDF";
+import { getPlayerPhoto } from "@/lib/player-photos";
 import { exportElementToPdf, renderElementToPdfBlob, downloadBlob } from "@/lib/pdf-export";
 import JSZip from "jszip";
 import { MinutosTab } from "@/components/MinutosTab";
@@ -1212,7 +1213,9 @@ function PlayerCard({
     <div className="rounded-lg border bg-card p-4 flex flex-col justify-between h-full">
       <div>
         <div className="flex items-center justify-between mb-3">
-          <div>
+          <div className="flex items-center gap-2.5 min-w-0">
+          <CardAvatar name={p.jugador} />
+          <div className="min-w-0">
             <Link
               to={detailUrl}
               className="text-sm font-medium hover:underline text-foreground flex items-center gap-1.5"
@@ -1223,6 +1226,7 @@ function PlayerCard({
               )}
             </Link>
             <div className="text-[11px] text-muted-foreground">{p.responseCount} respuestas</div>
+          </div>
           </div>
           <span className="size-2.5 rounded-full shrink-0" style={{ background: statusColor(worst) }} />
         </div>
@@ -1256,6 +1260,24 @@ function PlayerCard({
       </div>
     </div>
   );
+}
+
+/** Foto pequeña en la tarjeta: permite ver de un vistazo qué jugadores no tienen foto. */
+function CardAvatar({ name }: { name: string }) {
+  const src = getPlayerPhoto(name);
+  const [failed, setFailed] = useState(false);
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
+  if (!src || failed) {
+    return (
+      <div
+        className="size-9 shrink-0 rounded-full border border-dashed grid place-items-center text-[11px] font-semibold text-muted-foreground"
+        title="Sin foto: revisa src/lib/player-photos.ts"
+      >
+        {initials}
+      </div>
+    );
+  }
+  return <img src={src} alt={name} onError={() => setFailed(true)} className="size-9 shrink-0 rounded-full object-cover border" />;
 }
 
 // ─── Heatmap ──────────────────────────────────────────────────────────────────
