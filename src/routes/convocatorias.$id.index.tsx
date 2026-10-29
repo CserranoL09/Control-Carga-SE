@@ -1202,23 +1202,23 @@ function PlayerCard({
 
   const { id: callUpId } = useParams<{ id: string }>();
   const mins = playerMinutesSummary(p.jugador, minutes);
+  // El enlace usa el nombre tal y como llega del Form, así funciona para cualquier jugador
+  const detailUrl = `/convocatorias/${callUpId}/jugador/${encodeURIComponent(p.jugador)}`;
 
   return (
     <div className="rounded-lg border bg-card p-4 flex flex-col justify-between h-full">
       <div>
         <div className="flex items-center justify-between mb-3">
           <div>
-            {dbPlayer ? (
-              <Link
-                to={`/convocatorias/${callUpId}/jugador/${dbPlayer.id}`}
-                className="text-sm font-medium hover:underline text-foreground flex items-center gap-1.5"
-              >
-                <span>{p.jugador}</span>
+            <Link
+              to={detailUrl}
+              className="text-sm font-medium hover:underline text-foreground flex items-center gap-1.5"
+            >
+              <span>{p.jugador}</span>
+              {dbPlayer && (
                 <span className="text-[10px] text-muted-foreground font-normal">({dbPlayer.position})</span>
-              </Link>
-            ) : (
-              <div className="text-sm font-medium">{p.jugador}</div>
-            )}
+              )}
+            </Link>
             <div className="text-[11px] text-muted-foreground">{p.responseCount} respuestas</div>
           </div>
           <span className="size-2.5 rounded-full shrink-0" style={{ background: statusColor(worst) }} />
@@ -1235,16 +1235,9 @@ function PlayerCard({
         </div>
       </div>
       <div className="border-t pt-3 flex items-center justify-between mt-auto">
-        {dbPlayer ? (
-          <Link
-            to={`/convocatorias/${callUpId}/jugador/${dbPlayer.id}`}
-            className="text-[11px] text-primary hover:underline font-medium"
-          >
-            Ver Detalles
-          </Link>
-        ) : (
-          <span className="text-[11px] text-muted-foreground">Detalles N/A</span>
-        )}
+        <Link to={detailUrl} className="text-[11px] text-primary hover:underline font-medium">
+          Ver Detalles
+        </Link>
         <button
           onClick={() => onExportPDF(p.jugador)}
           disabled={isDisabled}

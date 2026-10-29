@@ -38,17 +38,40 @@ const tooltipStyle = {
   color: "var(--popover-foreground)",
 };
 
+function safeDecode(v: string): string {
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
+}
+
 export default function Page() {
   const { id, playerId } = useParams<{ id: string; playerId: string }>();
   const {
     callUp,
     sessions,
     responses,
+    minutes,
     loading,
     error,
   } = useCallUpDashboard(id);
 
-  const mockPlayer = allPlayers.find((x) => x.id === playerId);
+  // playerId puede ser el id antiguo de la lista fija (p7) o el nombre del jugador en el Form
+  const normalize = (name: string) =>
+    name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+  const requested = safeDecode(playerId ?? "");
+  const listed = allPlayers.find((x) => x.id === requested)
+    ?? allPlayers.find((x) => normalize(x.name) === normalize(requested));
+  const formName = responses.find((r) => normalize(r.jugador) === normalize(listed?.name ?? requested))?.jugador;
+  const playerName = formName ?? listed?.name ?? requested;
+  const mockPlayer = playerName
+    ? {
+        name: playerName,
+        number: listed?.number ?? "—",
+        position: listed?.position ?? "Jugador",
+      }
+    : undefined;
   const { optimo, moderado } = getLoadThresholds();
   const [exporting, setExporting] = useState(false);
 
@@ -475,6 +498,7 @@ export default function Page() {
           callUp={callUp}
           sessions={sessions}
           responses={responses}
+          minutes={minutes}
           optimo={optimo}
           moderado={moderado}
           containerId={`pdf-report-${mockPlayer.name.replace(/\s+/g, "-")}`}
