@@ -729,7 +729,7 @@ function PlayerAvatar({
     .map((w) => w[0]?.toUpperCase())
     .join("");
 
-  if (failed) {
+  if (failed || !src) {
     return (
       <div
         style={{
