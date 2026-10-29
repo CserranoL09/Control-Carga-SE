@@ -8,6 +8,8 @@ export interface Player {
   name: string;
   number: number;
   position: string;
+  /** Ruta opcional a la foto (p. ej. "/jugadores/otra-foto.png") si no sigue la regla del nombre */
+  photo?: string;
 }
 
 export interface Session {
