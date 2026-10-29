@@ -18,7 +18,7 @@ export const FOTOS_POR_JUGADOR: Record<string, string> = {
   // Ejemplos (quita las dos barras // del principio para activarlos):
   // "DAVID NOVOA": "novoa.png",
   // "PABLO": "pablo-ramirez.png",
-  // "ADRIÁN": "rivera.png",
+  "ADRIÁN": "rivera.png",
 };
 
 export const ESCUDO_SRC = "/escudo-seleccion.png";
