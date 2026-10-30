@@ -218,7 +218,7 @@ export default function ConvocatoriaPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "resumen", label: "Resumen" },
     { id: "sesiones", label: "Sesiones" },
-    { id: "minutos", label: "Minutos" },
+    { id: "minutos", label: "Minutos partido" },
     { id: "fatiga", label: "Control de Fatiga" },
     { id: "carga", label: "Control de Carga" },
     { id: "zscore", label: "Z-Score" },
