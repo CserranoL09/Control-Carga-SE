@@ -31,6 +31,7 @@ import { getPlayerPhoto } from "@/lib/player-photos";
 import { exportElementToPdf, renderElementToPdfBlob, downloadBlob } from "@/lib/pdf-export";
 import JSZip from "jszip";
 import { MinutosTab } from "@/components/MinutosTab";
+import { ZScoreTab } from "@/components/ZScoreTab";
 import { formatMinutes, playerMinutesSummary } from "@/lib/minutes";
 import type { StoredMinutes } from "@/lib/store";
 import { players as allPlayers } from "@/lib/mock-data";
@@ -42,7 +43,7 @@ const normalizeName = (name: string) =>
     .trim()
     .toUpperCase();
 
-type Tab = "resumen" | "sesiones" | "minutos" | "fatiga" | "carga" | "jugadores";
+type Tab = "resumen" | "sesiones" | "minutos" | "fatiga" | "carga" | "zscore" | "jugadores";
 
 const tooltipStyle = {
   background: "var(--popover)",
@@ -220,6 +221,7 @@ export default function ConvocatoriaPage() {
     { id: "minutos", label: "Minutos" },
     { id: "fatiga", label: "Control de Fatiga" },
     { id: "carga", label: "Control de Carga" },
+    { id: "zscore", label: "Z-Score" },
     { id: "jugadores", label: "Jugadores" },
   ];
 
@@ -347,6 +349,15 @@ export default function ConvocatoriaPage() {
               <ControlCargaTab
                 sessionMetrics={filteredSessionMetrics.filter((s) => s.duration > 0)}
                 acwrSeries={filteredAcwrSeriesRpe}
+              />
+            )}
+            {tab === "zscore" && callUp && (
+              <ZScoreTab
+                sessionMetrics={sessionMetrics}
+                minutes={minutes}
+                players={activePlayers}
+                callUpName={callUp.name}
+                copyButton={(targetId) => <CopyPNGButton targetId={targetId} />}
               />
             )}
             {tab === "jugadores" && (
