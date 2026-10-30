@@ -118,12 +118,24 @@ export function samePlayer(a: string, b: string): boolean {
   return normalizePlayerKey(a) === normalizePlayerKey(b);
 }
 
+export interface StoredRecovery {
+  jugador: string;
+  /** yyyy-MM-dd */
+  fecha: string;
+  /** 0-10, valor bajo = mejor recuperado */
+  valor: number;
+  timestamp: string;
+}
+
 interface AllData {
   callUps: StoredCallUp[];
   sessions: StoredSession[];
   minutes: StoredMinutes[];
   /** false si el Apps Script desplegado todavía no conoce la hoja "Minutos" */
   minutesSupported: boolean;
+  recovery: StoredRecovery[];
+  /** false si el Apps Script desplegado todavía no lee el Sheet de recuperación */
+  recoverySupported: boolean;
 }
 
 async function apiGet(): Promise<AllData> {
@@ -162,7 +174,17 @@ async function apiGet(): Promise<AllData> {
     !!m.id && !!m.jugador && isFinite(m.minutes) && m.minutes >= 0 && m.minutes <= 300,
   );
 
-  return { callUps, sessions, minutes, minutesSupported };
+  const recoverySupported = Array.isArray(data.recovery);
+  const recovery: StoredRecovery[] = (data.recovery ?? [])
+    .map((r: Record<string, string | number>) => ({
+      jugador: String(r.jugador ?? "").trim(),
+      fecha: parseToIsoDate(String(r.fecha ?? "")),
+      valor: Number(String(r.valor).replace(",", ".")),
+      timestamp: String(r.timestamp ?? ""),
+    }))
+    .filter((r: StoredRecovery) => r.jugador && r.fecha && isFinite(r.valor) && r.valor >= 0 && r.valor <= 10);
+
+  return { callUps, sessions, minutes, minutesSupported, recovery, recoverySupported };
 }
 
 async function apiPost(action: "upsert" | "delete", entity: "callup" | "session" | "response" | "minutes", data: object) {
