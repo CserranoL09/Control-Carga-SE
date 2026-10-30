@@ -309,6 +309,7 @@ export default function ConvocatoriaPage() {
               <ResumenTab
                 sessionMetrics={filteredSessionMetrics}
                 acwrSeries={filteredAcwrSeries}
+                acwrSeriesRpe={filteredAcwrSeriesRpe}
                 players={activePlayers}
                 playerMetrics={filteredPlayerMetrics}
                 sessions={sessions}
@@ -572,6 +573,7 @@ function SyncingOverlay() {
 function ResumenTab({
   sessionMetrics,
   acwrSeries,
+  acwrSeriesRpe,
   players,
   playerMetrics,
   sessions,
@@ -582,6 +584,7 @@ function ResumenTab({
 }: {
   sessionMetrics: ReturnType<typeof useCallUpDashboard>["sessionMetrics"];
   acwrSeries: ReturnType<typeof useCallUpDashboard>["acwrSeries"];
+  acwrSeriesRpe: ReturnType<typeof useCallUpDashboard>["acwrSeries"];
   players: string[];
   playerMetrics: ReturnType<typeof useCallUpDashboard>["playerMetrics"];
   sessions: StoredSession[];
@@ -601,6 +604,23 @@ function ResumenTab({
   const acwr = lastACWR?.acwr ?? 0;
 
   const highFatigueAlerts = playerMetrics.filter((p) => p.ratioACWR > 1.5);
+
+  // Vista del resumen (Fatiga / Carga), recordada entre visitas
+  const [vista, setVistaState] = useState<"fatiga" | "carga">(() => {
+    try {
+      return localStorage.getItem("resumen-vista") === "carga" ? "carga" : "fatiga";
+    } catch {
+      return "fatiga";
+    }
+  });
+  const setVista = (v: "fatiga" | "carga") => {
+    setVistaState(v);
+    try {
+      localStorage.setItem("resumen-vista", v);
+    } catch {
+      /* sin almacenamiento */
+    }
+  };
 
   return (
     <>
@@ -632,20 +652,36 @@ function ResumenTab({
         </div>
       )}
 
-      {/* Heatmap con el formato de la captura */}
+      {/* Selector de vista: Fatiga / Carga */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">Heatmap fatiga — jugadores × sesiones</h3>
-          {players.length > 0 && <CopyPNGButton targetId="heatmap-fatiga-table" />}
+        <div className="flex items-center justify-between gap-3">
+          <div className="inline-flex rounded-md border p-0.5 bg-muted/30" role="group" aria-label="Vista del resumen">
+            {(["fatiga", "carga"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setVista(v)}
+                aria-pressed={vista === v}
+                className={`px-4 py-1.5 text-sm rounded font-medium transition-colors ${
+                  vista === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {v === "fatiga" ? "Fatiga" : "Carga"}
+              </button>
+            ))}
+          </div>
+          {players.length > 0 && <CopyPNGButton targetId={`heatmap-${vista}-table`} />}
         </div>
         {players.length === 0 ? (
           <p className="text-xs text-muted-foreground py-8 text-center border rounded-lg bg-card">Sin datos de formulario.</p>
         ) : (
           <FatigaHeatmap
-            id="heatmap-fatiga-table"
+            key={vista}
+            mode={vista}
+            id={`heatmap-${vista}-table`}
             players={players}
             sessionMetrics={sessionMetrics}
-            acwrSeries={acwrSeries}
+            acwrSeries={vista === "carga" ? acwrSeriesRpe : acwrSeries}
             sessions={sessions}
             onSessionUpdated={onSessionUpdated}
             onResponseUpdated={onResponseUpdated}
@@ -655,8 +691,8 @@ function ResumenTab({
         )}
       </div>
 
-      {/* Grafica Control de carga y control de fatiga (2 columnas) */}
-      <div className="grid lg:grid-cols-2 gap-4">
+      {vista === "fatiga" ? (
+        <>
         <Panel
           id="control-fatiga-panel"
           title="Control de Fatiga por sesión (UA = Fatiga × Tiempo)"
@@ -684,7 +720,16 @@ function ResumenTab({
             </BarChart>
           </ResponsiveContainer>
         </Panel>
-
+          <AcwrEvolutionPanel
+            id="acwr-panel"
+            title="Evolución de Fatiga Aguda, Crónica y Ratio A:C (2-5)"
+            label="FATIGA"
+            series={acwrSeries}
+            sessionMetrics={sessionMetrics}
+          />
+        </>
+      ) : (
+        <>
         <Panel
           id="control-carga-panel"
           title="Control de Carga por sesión (UA = RPE × Tiempo)"
@@ -712,97 +757,125 @@ function ResumenTab({
             </BarChart>
           </ResponsiveContainer>
         </Panel>
-      </div>
-
-      {/* Grafica acwr */}
-      <Panel
-        id="acwr-panel"
-        title="Evolución de Fatiga Aguda, Crónica y Ratio A:C (2-5)"
-        action={<CopyPNGButton targetId="acwr-panel" />}
-      >
-        <ResponsiveContainer width="100%" height={400}>
-          <ComposedChart
-            data={acwrSeries.map((s) => {
-              const session = sessionMetrics.find((sm) => sm.date === s.date);
-              const label = formatDateESZeroPadded(s.date) + (session?.dayLabel ? ` ${session.dayLabel}` : "");
-              return {
-                label,
-                aguda: Math.round(s.aguda),
-                cronica: Math.round(s.cronica),
-                acwr: s.acwr,
-                valorBajo: 0.8,
-                valorAlto: 1.5,
-              };
-            })}
-            margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-          >
-            <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-            <YAxis yAxisId="left" domain={[0, 1250]} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-            <YAxis
-              yAxisId="right"
-              orientation="right"
-              domain={[0.0, 1.5]}
-              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-              tickFormatter={(v) => v.toFixed(2).replace('.', ',')}
-            />
-            <Tooltip content={<ACWRTooltip />} />
-            <Legend
-              verticalAlign="top"
-              height={36}
-              wrapperStyle={{ fontSize: 11, fontWeight: "bold" }}
-            />
-            <Bar yAxisId="left" dataKey="aguda" fill="#ff0000" name="FATIGA AGUDA" barSize={35}>
-              <LabelList dataKey="aguda" position="inside" fill="#ffffff" fontSize={11} fontWeight="bold" />
-            </Bar>
-            <Bar yAxisId="left" dataKey="cronica" fill="#2f5597" name="FATIGA CRÓNICA" barSize={35}>
-              <LabelList dataKey="cronica" position="inside" fill="#ffffff" fontSize={11} fontWeight="bold" />
-            </Bar>
-            <Line
-              yAxisId="right"
-              type="monotone"
-              dataKey="acwr"
-              stroke="#ffffff"
-              strokeWidth={2}
-              dot={{ r: 4, fill: "#ffffff", stroke: "#ffffff" }}
-              name="RATIO A:C (2-5)"
-            >
-              <LabelList
-                dataKey="acwr"
-                position="top"
-                formatter={(v: number) => v.toFixed(2).replace('.', ',')}
-                fontSize={11}
-                fontWeight="bold"
-                fill="#ffffff"
-                offset={10}
-              />
-            </Line>
-            <Line
-              yAxisId="right"
-              type="monotone"
-              dataKey="valorBajo"
-              stroke="#2ebb5c"
-              strokeDasharray="5 5"
-              strokeWidth={2}
-              dot={false}
-              activeDot={false}
-              name="VALOR BAJO"
-            />
-            <Line
-              yAxisId="right"
-              type="monotone"
-              dataKey="valorAlto"
-              stroke="#ef4444"
-              strokeDasharray="5 5"
-              strokeWidth={2}
-              dot={false}
-              activeDot={false}
-              name="VALOR ALTO"
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </Panel>
+          <AcwrEvolutionPanel
+            id="acwr-carga-panel"
+            title="Evolución de Carga Aguda, Crónica y Ratio A:C (2-5)"
+            label="CARGA"
+            series={acwrSeriesRpe}
+            sessionMetrics={sessionMetrics}
+          />
+        </>
+      )}
     </>
+  );
+}
+
+/** Gráfica de evolución Aguda / Crónica / Ratio A:C, para fatiga o para carga. */
+function AcwrEvolutionPanel({
+  id,
+  title,
+  label,
+  series,
+  sessionMetrics,
+}: {
+  id: string;
+  title: string;
+  /** "FATIGA" o "CARGA" (leyendas de las barras) */
+  label: string;
+  series: ReturnType<typeof useCallUpDashboard>["acwrSeries"];
+  sessionMetrics: ReturnType<typeof useCallUpDashboard>["sessionMetrics"];
+}) {
+  return (
+    <Panel
+      id={id}
+      title={title}
+      action={<CopyPNGButton targetId={id} />}
+    >
+      <ResponsiveContainer width="100%" height={400}>
+        <ComposedChart
+          data={series.map((s) => {
+            const session = sessionMetrics.find((sm) => sm.date === s.date);
+            const label = formatDateESZeroPadded(s.date) + (session?.dayLabel ? ` ${session.dayLabel}` : "");
+            return {
+              label,
+              aguda: Math.round(s.aguda),
+              cronica: Math.round(s.cronica),
+              acwr: s.acwr,
+              valorBajo: 0.8,
+              valorAlto: 1.5,
+            };
+          })}
+          margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+        >
+          <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+          <YAxis
+            yAxisId="left"
+            domain={[0, (max: number) => Math.max(1250, Math.ceil(max / 250) * 250)]}
+            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            domain={[0.0, 1.5]}
+            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+            tickFormatter={(v) => v.toFixed(2).replace('.', ',')}
+          />
+          <Tooltip content={<ACWRTooltip />} />
+          <Legend
+            verticalAlign="top"
+            height={36}
+            wrapperStyle={{ fontSize: 11, fontWeight: "bold" }}
+          />
+          <Bar yAxisId="left" dataKey="aguda" fill="#ff0000" name={`${label} AGUDA`} barSize={35}>
+            <LabelList dataKey="aguda" position="inside" fill="#ffffff" fontSize={11} fontWeight="bold" />
+          </Bar>
+          <Bar yAxisId="left" dataKey="cronica" fill="#2f5597" name={`${label} CRÓNICA`} barSize={35}>
+            <LabelList dataKey="cronica" position="inside" fill="#ffffff" fontSize={11} fontWeight="bold" />
+          </Bar>
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="acwr"
+            stroke="#ffffff"
+            strokeWidth={2}
+            dot={{ r: 4, fill: "#ffffff", stroke: "#ffffff" }}
+            name="RATIO A:C (2-5)"
+          >
+            <LabelList
+              dataKey="acwr"
+              position="top"
+              formatter={(v: number) => v.toFixed(2).replace('.', ',')}
+              fontSize={11}
+              fontWeight="bold"
+              fill="#ffffff"
+              offset={10}
+            />
+          </Line>
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="valorBajo"
+            stroke="#2ebb5c"
+            strokeDasharray="5 5"
+            strokeWidth={2}
+            dot={false}
+            activeDot={false}
+            name="VALOR BAJO"
+          />
+          <Line
+            yAxisId="right"
+            type="monotone"
+            dataKey="valorAlto"
+            stroke="#ef4444"
+            strokeDasharray="5 5"
+            strokeWidth={2}
+            dot={false}
+            activeDot={false}
+            name="VALOR ALTO"
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </Panel>
   );
 }
 
@@ -1283,6 +1356,7 @@ function CardAvatar({ name }: { name: string }) {
 // ─── Heatmap ──────────────────────────────────────────────────────────────────
 
 function FatigaHeatmap({
+  mode = "fatiga",
   players,
   sessionMetrics,
   acwrSeries,
@@ -1293,6 +1367,8 @@ function FatigaHeatmap({
   updateResponseLocally,
   updateSessionLocally,
 }: {
+  /** "fatiga": valores de fatiga y UA = Fatiga × Tiempo; "carga": valores RPE y UA = RPE × Tiempo */
+  mode?: "fatiga" | "carga";
   players: string[];
   sessionMetrics: ReturnType<typeof useCallUpDashboard>["sessionMetrics"];
   acwrSeries: ReturnType<typeof useCallUpDashboard>["acwrSeries"];
@@ -1350,8 +1426,15 @@ function FatigaHeatmap({
     return dateStr;
   }
 
+  const isCarga = mode === "carga";
+  const L = isCarga ? "Carga" : "Fatiga";
+  const cellValue = (s: (typeof sessionMetrics)[number], jugador: string) =>
+    isCarga ? s.playerRPE[jugador] : s.playerFatigue[jugador];
+  const sessionUA = (s: (typeof sessionMetrics)[number]) => (isCarga ? s.rpeXTiempo : s.fatigaXTiempo);
+  const sessionMean = (s: (typeof sessionMetrics)[number]) => (isCarga ? s.rpeMedia : s.fatigaMedia);
+
   // Calculations for summary rows
-  const uaValues = sessionMetrics.map((s) => s.fatigaXTiempo);
+  const uaValues = sessionMetrics.map(sessionUA);
   const uaTotal = uaValues.reduce((a, b) => a + b, 0);
   const uaMedia = avg(uaValues);
   const stdDev = sampleStd(uaValues);
@@ -1464,7 +1547,7 @@ function FatigaHeatmap({
         <thead>
           {/* Row 1: FECHA */}
           <tr className="border-b bg-muted/30">
-            <th className="px-3 py-1.5 text-left font-bold border-r w-[200px] bg-muted/40 text-[10px] uppercase tracking-wider">Fecha</th>
+            <th className="px-3 py-1.5 text-left font-bold border-r w-[200px] bg-card text-[10px] uppercase tracking-wider sticky left-0 z-20 shadow-[1px_0_0_var(--border)]">Fecha</th>
             {sessionMetrics.map((s) => (
               <th key={s.sessionId} className="px-3 py-1.5 border-r font-bold tabular-nums whitespace-nowrap text-[10px]">
                 {formatDateES(s.date)} {s.dayLabel}
@@ -1473,7 +1556,7 @@ function FatigaHeatmap({
           </tr>
           {/* Row 2: DIA */}
           <tr className="border-b bg-muted/30">
-            <th className="px-3 py-1.5 text-left font-bold border-r w-[200px] bg-muted/40 text-[10px] uppercase tracking-wider">Dia</th>
+            <th className="px-3 py-1.5 text-left font-bold border-r w-[200px] bg-card text-[10px] uppercase tracking-wider sticky left-0 z-20 shadow-[1px_0_0_var(--border)]">Dia</th>
             {sessionMetrics.map((s) => (
               <th key={s.sessionId} className="px-3 py-1.5 border-r font-bold whitespace-nowrap text-[10px]">
                 {getSpanishDayName(s.date)} {s.dayLabel}
@@ -1482,7 +1565,7 @@ function FatigaHeatmap({
           </tr>
           {/* Row 3: JUGADOR / Tipo Sesion */}
           <tr className="border-b bg-red-650 text-white font-semibold">
-            <th className="px-3 py-1.5 text-left font-bold border-r w-[200px] bg-red-600 border-red-700 text-[10px] uppercase tracking-wider">Jugador</th>
+            <th className="px-3 py-1.5 text-left font-bold border-r w-[200px] bg-red-600 border-red-700 text-[10px] uppercase tracking-wider sticky left-0 z-20">Jugador</th>
             {sessionMetrics.map((s) => (
               <th key={s.sessionId} className={`px-3 py-1.5 border-r border-red-700 whitespace-nowrap text-[10px] ${getSessionTypeHeaderBg(s.type as SessionType)}`}>
                 {s.type}
@@ -1494,21 +1577,22 @@ function FatigaHeatmap({
           {/* Player Rows */}
           {players.map((jugador) => (
             <tr key={jugador} className="border-b hover:bg-muted/10">
-              <td className="px-3 py-1 text-left border-r font-bold uppercase bg-muted/10 w-[200px] text-[10px] whitespace-nowrap">{jugador}</td>
+              <td className="px-3 py-1 text-left border-r font-bold uppercase bg-card w-[200px] text-[10px] whitespace-nowrap sticky left-0 z-10 shadow-[1px_0_0_var(--border)]">{jugador}</td>
               {sessionMetrics.map((s) => {
-                const val = s.playerFatigue[jugador];
+                const val = cellValue(s, jugador);
                 return (
                   <td
                     key={s.sessionId}
                     onClick={() => {
-                      const rpeVal = s.playerRPE[jugador] || 5;
+                      const fatVal = s.playerFatigue[jugador];
+                      const rpeVal = s.playerRPE[jugador];
                       setSelectedCell({
                         jugador,
                         sessionId: s.sessionId,
                         date: s.date,
-                        fatigue: val || 5,
-                        rpe: rpeVal,
-                        hasResponse: val !== undefined,
+                        fatigue: fatVal || 5,
+                        rpe: rpeVal || 5,
+                        hasResponse: fatVal !== undefined || rpeVal !== undefined,
                       });
                     }}
                     className={`px-3 py-1 tabular-nums cursor-pointer select-none transition-all ${getFatigueCellBg(val)}`}
@@ -1523,7 +1607,7 @@ function FatigaHeatmap({
 
           {/* TIEMPO SESIÓN (min) */}
           <tr className="border-b font-bold bg-muted/30 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider">Tiempo Sesión (min)</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">Tiempo Sesión (min)</td>
             {sessionMetrics.map((s) => {
               const isEditing = editingSessionDurationId === s.sessionId;
               return (
@@ -1563,27 +1647,27 @@ function FatigaHeatmap({
 
           {/* FATIGA MEDIA SESIÓN */}
           <tr className="border-b bg-muted/10 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold">Fatiga Media Sesión</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">{L} Media Sesión</td>
             {sessionMetrics.map((s) => (
               <td key={s.sessionId} className="px-3 py-1.5 border-r tabular-nums font-bold">
-                {Math.round(s.fatigaMedia)}
+                {Math.round(sessionMean(s))}
               </td>
             ))}
           </tr>
 
           {/* FATIGA SESIÓN (FATIGA x TIEMPO) */}
           <tr className="border-b bg-muted/10 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold">Fatiga Sesión (Fatiga x Tiempo)</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">{isCarga ? "Carga Sesión (RPE x Tiempo)" : "Fatiga Sesión (Fatiga x Tiempo)"}</td>
             {sessionMetrics.map((s) => (
               <td key={s.sessionId} className="px-3 py-1.5 border-r tabular-nums font-bold">
-                {Math.round(s.fatigaXTiempo)}
+                {Math.round(sessionUA(s))}
               </td>
             ))}
           </tr>
 
           {/* FATIGA MEDIA SEMANAL */}
           <tr className="border-b bg-muted/5 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold">Fatiga Media Semanal</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">{L} Media Semanal</td>
             {sessionMetrics.map((s, i) => {
               const isMid = i === Math.floor(sessionMetrics.length / 2);
               return (
@@ -1596,7 +1680,7 @@ function FatigaHeatmap({
 
           {/* DESVIACIÓN ESTÁNDAR */}
           <tr className="border-b bg-muted/5 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold">Desviación Estándar</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">Desviación Estándar</td>
             {sessionMetrics.map((s, i) => {
               const isMid = i === Math.floor(sessionMetrics.length / 2);
               return (
@@ -1609,7 +1693,7 @@ function FatigaHeatmap({
 
           {/* ÍNDICE DE MONOTONÍA */}
           <tr className="border-b bg-muted/5 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold">Índice de Monotonía</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">Índice de Monotonía</td>
             {sessionMetrics.map((s, i) => {
               const isMid = i === Math.floor(sessionMetrics.length / 2);
               return (
@@ -1622,7 +1706,7 @@ function FatigaHeatmap({
 
           {/* ÍNDICE DE FATIGA */}
           <tr className="border-b bg-muted/5 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold">Índice de Fatiga</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">Índice de {L}</td>
             {sessionMetrics.map((s, i) => {
               const isMid = i === Math.floor(sessionMetrics.length / 2);
               return (
@@ -1635,7 +1719,7 @@ function FatigaHeatmap({
 
           {/* FATIGA AGUDA */}
           <tr className="border-b bg-muted/10 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold">Fatiga Aguda</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">{L} Aguda</td>
             {sessionMetrics.map((s, i) => (
               <td key={s.sessionId} className="px-3 py-1.5 border-r tabular-nums">
                 {acwrSeries[i]?.aguda ?? 0}
@@ -1645,7 +1729,7 @@ function FatigaHeatmap({
 
           {/* FATIGA CRÓNICA */}
           <tr className="border-b bg-muted/10 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold">Fatiga Crónica</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">{L} Crónica</td>
             {sessionMetrics.map((s, i) => (
               <td key={s.sessionId} className="px-3 py-1.5 border-r tabular-nums">
                 {acwrSeries[i]?.cronica ?? 0}
@@ -1655,7 +1739,7 @@ function FatigaHeatmap({
 
           {/* RATIO A:C (2-5) */}
           <tr className="border-b bg-muted/15 font-bold text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-bold">Ratio A:C (2-5)</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-bold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">Ratio A:C (2-5)</td>
             {sessionMetrics.map((s, i) => {
               const ratio = acwrSeries[i]?.acwr ?? 0;
               return (
