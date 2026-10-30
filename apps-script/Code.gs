@@ -17,6 +17,9 @@ const SHEET_SESSIONS  = "Sesiones";                   // Hoja de sesiones
 const SHEET_MINUTES   = "Minutos";                    // Hoja de minutos de juego (se crea sola)
 const MINUTES_HEADERS = ["id", "convocatoriaId", "sesionId", "fecha", "jugador", "minutos"];
 
+// Cuestionario matinal de recuperación (OTRO Google Sheet, solo lectura)
+const RECOVERY_SPREADSHEET_ID = "1XvFrD51I9HY4spyLLwxr0VFJ2jlyrcXjyMTIlUhIvMU";
+
 
 // ─── Selector inteligente de la Hoja de Respuestas ────────────
 /**
@@ -68,6 +71,7 @@ function doGet(e) {
   const callUps = sheetToObjects(SHEET_CALLUPS);
   const sessions = sheetToObjects(SHEET_SESSIONS);
   const minutes = readMinutes();
+  const recovery = readRecovery();
   const responsesSheet = getResponsesSheet();
 
   const payload = JSON.stringify({
@@ -75,6 +79,7 @@ function doGet(e) {
     callUps,
     sessions,
     minutes,
+    recovery,
     responses: readResponses(responsesSheet),
     responsesSheetName: responsesSheet ? responsesSheet.getName() : null
   });
@@ -222,6 +227,53 @@ function readMinutes() {
     });
   }
   return out;
+}
+
+
+// ─── Helpers: Recuperación (cuestionario matinal) ─────────────
+
+/**
+ * Lee la primera pestaña del Sheet de recuperación (solo lectura).
+ * Columnas: A marca temporal · B jugador · C valor 0-10 · D categoría (se ignora) · E fecha · F hora
+ * Salta filas "MEDIA" y vacías; si un jugador responde varias veces el mismo día,
+ * se queda con la última respuesta. Si el libro no se puede abrir devuelve [].
+ */
+function readRecovery() {
+  try {
+    const sheet = SpreadsheetApp.openById(RECOVERY_SPREADSHEET_ID).getSheets()[0];
+    const values = sheet.getDataRange().getValues();
+    const latest = {}; // "fecha|JUGADOR" -> { ms, row }
+    for (let i = 1; i < values.length; i++) {
+      const r = values[i];
+      const first = String(r[0] || "").trim().toUpperCase();
+      if (!first || first === "MEDIA") continue;
+      const jugador = String(r[1] || "").trim();
+      if (!jugador) continue;
+      const raw = r[2];
+      if (raw === "" || raw === null) continue;
+      const valor = typeof raw === "number" ? raw : Number(String(raw).replace(",", "."));
+      if (!isFinite(valor) || valor < 0 || valor > 10) continue;
+      const fecha = parseIsoDate(r[4]) || parseIsoDate(r[0]);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) continue;
+      const ms = r[0] instanceof Date ? r[0].getTime() : i; // orden de la hoja si no hay fecha-hora
+      const key = fecha + "|" + jugador.toUpperCase();
+      if (!latest[key] || ms >= latest[key].ms) {
+        latest[key] = {
+          ms: ms,
+          row: {
+            timestamp: r[0] instanceof Date ? r[0].toISOString() : String(r[0] || ""),
+            jugador: jugador,
+            fecha: fecha,
+            valor: Math.round(valor * 100) / 100
+          }
+        };
+      }
+    }
+    return Object.keys(latest).map(function (k) { return latest[k].row; });
+  } catch (err) {
+    console.error("readRecovery: " + err);
+    return [];
+  }
 }
 
 

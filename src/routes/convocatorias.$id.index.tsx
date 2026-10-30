@@ -32,6 +32,7 @@ import { exportElementToPdf, renderElementToPdfBlob, downloadBlob } from "@/lib/
 import JSZip from "jszip";
 import { MinutosTab } from "@/components/MinutosTab";
 import { ZScoreTab } from "@/components/ZScoreTab";
+import { RecuperacionTab } from "@/components/RecuperacionTab";
 import { formatMinutes, playerMinutesSummary } from "@/lib/minutes";
 import type { StoredMinutes } from "@/lib/store";
 import { players as allPlayers } from "@/lib/mock-data";
@@ -43,7 +44,7 @@ const normalizeName = (name: string) =>
     .trim()
     .toUpperCase();
 
-type Tab = "resumen" | "sesiones" | "minutos" | "fatiga" | "carga" | "zscore" | "jugadores";
+type Tab = "resumen" | "sesiones" | "minutos" | "recuperacion" | "fatiga" | "carga" | "zscore" | "jugadores";
 
 const tooltipStyle = {
   background: "var(--popover)",
@@ -66,6 +67,8 @@ export default function ConvocatoriaPage() {
     playerMetrics,
     minutes,
     minutesSupported,
+    recovery,
+    recoverySupported,
     loading,
     error,
     refresh,
@@ -218,7 +221,8 @@ export default function ConvocatoriaPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "resumen", label: "Resumen" },
     { id: "sesiones", label: "Sesiones" },
-    { id: "minutos", label: "Minutos partido" },
+    { id: "minutos", label: "Minutos" },
+    { id: "recuperacion", label: "Recuperación" },
     { id: "fatiga", label: "Control de Fatiga" },
     { id: "carga", label: "Control de Carga" },
     { id: "zscore", label: "Z-Score" },
@@ -337,6 +341,16 @@ export default function ConvocatoriaPage() {
                 minutes={minutes}
                 minutesSupported={minutesSupported}
                 onSaved={refreshAll}
+              />
+            )}
+            {tab === "recuperacion" && (
+              <RecuperacionTab
+                recovery={recovery}
+                recoverySupported={recoverySupported}
+                formPlayers={players}
+                selectedPlayers={selectedPlayers}
+                sessionMetrics={sessionMetrics}
+                copyButton={(targetId) => <CopyPNGButton targetId={targetId} />}
               />
             )}
             {tab === "fatiga" && (
