@@ -224,13 +224,13 @@ export default function ConvocatoriaPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "resumen", label: "Resumen" },
     { id: "sesiones", label: "Sesiones" },
-    { id: "minutos", label: "Minutos" },
+    { id: "minutos", label: "Minutos partido" },
     { id: "recuperacion", label: "Recuperación" },
-    { id: "readiness", label: "Readiness" },
+    { id: "readiness", label: "Disponibilidad" },
     { id: "fatiga", label: "Control de Fatiga" },
     { id: "carga", label: "Control de Carga" },
     { id: "zscore", label: "Z-Score" },
-    { id: "jugadores", label: "Jugadores" },
+    { id: "jugadores", label: "Informe jugadores" },
     { id: "dashboard", label: "Dashboard" },
   ];
 
