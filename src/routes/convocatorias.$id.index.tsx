@@ -36,7 +36,7 @@ import { RecuperacionTab } from "@/components/RecuperacionTab";
 import { ReadinessTab } from "@/components/ReadinessTab";
 import { DashboardTab } from "@/components/dashboard/DashboardTab";
 import { formatMinutes, playerMinutesSummary } from "@/lib/minutes";
-import type { StoredMinutes } from "@/lib/store";
+import { samePlayer, type StoredMinutes } from "@/lib/store";
 import { players as allPlayers } from "@/lib/mock-data";
 
 const normalizeName = (name: string) =>
@@ -71,6 +71,7 @@ export default function ConvocatoriaPage() {
     minutesSupported,
     recovery,
     recoverySupported,
+    notes,
     loading,
     error,
     refresh,
@@ -426,6 +427,10 @@ export default function ConvocatoriaPage() {
           sessions={sessions}
           responses={responses}
           minutes={minutes}
+          notes={notes
+            .filter((n) => n.enInforme && samePlayer(n.jugador, exportingPlayer) && (n.titulo.trim() || n.texto.trim()))
+            .sort((a, b) => a.orden - b.orden)
+            .map((n) => ({ titulo: n.titulo.trim(), texto: n.texto }))}
           optimo={optimo}
           moderado={moderado}
           containerId={`pdf-report-${exportingPlayer.replace(/\s+/g, "-")}`}
