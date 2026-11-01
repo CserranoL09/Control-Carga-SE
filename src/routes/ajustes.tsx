@@ -2,6 +2,13 @@ import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { getLoadThresholds, saveLoadThresholds } from "@/lib/store";
 import {
+  DEFAULT_READINESS_CONFIG,
+  getReadinessConfig,
+  resetReadinessConfig,
+  saveReadinessConfig,
+  type ReadinessConfig,
+} from "@/lib/readiness";
+import {
   getAppsScriptUrl,
   saveAppsScriptUrl,
   getSheetsCsvUrl,
@@ -33,6 +40,9 @@ export default function Ajustes() {
   const [optimo, setOptimo] = useState(400);
   const [moderado, setModerado] = useState(600);
 
+  // Readiness
+  const [rcfg, setRcfg] = useState<ReadinessConfig>(DEFAULT_READINESS_CONFIG);
+
   // Google integration URLs
   const [appsScriptUrl, setAppsScriptUrl] = useState("");
   const [sheetsCsvUrl, setSheetsCsvUrl] = useState("");
@@ -46,6 +56,7 @@ export default function Ajustes() {
     const thresholds = getLoadThresholds();
     setOptimo(thresholds.optimo);
     setModerado(thresholds.moderado);
+    setRcfg(getReadinessConfig());
     setAppsScriptUrl(getAppsScriptUrl());
     setSheetsCsvUrl(getSheetsCsvUrl());
   }, []);
@@ -62,6 +73,32 @@ export default function Ajustes() {
     }
     saveLoadThresholds({ optimo, moderado });
     toast.success("Umbrales de carga guardados correctamente.");
+  };
+
+  // ── Readiness save ───────────────────────────────────────────────────────────
+  const handleSaveReadiness = () => {
+    const w = rcfg.weights;
+    if ([w.rec, w.fat, w.acwr, w.z].some((v) => v < 0) || w.rec + w.fat + w.acwr + w.z <= 0) {
+      toast.error("Los pesos deben ser positivos y no pueden ser todos cero.");
+      return;
+    }
+    if (rcfg.thresholds.amarillo >= rcfg.thresholds.verde) {
+      toast.error("El umbral de amarillo debe ser menor que el de verde.");
+      return;
+    }
+    saveReadinessConfig(rcfg);
+    toast.success("Configuración de readiness guardada.");
+  };
+
+  const handleResetReadiness = () => {
+    resetReadinessConfig();
+    setRcfg(DEFAULT_READINESS_CONFIG);
+    toast.success("Readiness restablecido a los valores por defecto.");
+  };
+
+  const num = (v: string) => {
+    const n = Number(v.replace(",", "."));
+    return isFinite(n) ? n : 0;
   };
 
   // ── Google URLs save ─────────────────────────────────────────────────────────
@@ -173,6 +210,114 @@ export default function Ajustes() {
               className="text-xs font-semibold px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/95 rounded-md shadow-sm transition-colors"
             >
               Guardar umbrales
+            </button>
+          </div>
+        </div>
+
+        {/* ── Readiness ─────────────────────────────────────────────────────── */}
+        <div className="rounded-lg border bg-card p-5 space-y-5">
+          <div>
+            <h3 className="text-sm font-medium">Readiness</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Pesos de cada componente (se reparten si falta alguno), semáforo y reglas de seguridad.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+            {(
+              [
+                ["rec", "Recuperación matinal"],
+                ["fat", "Fatiga del día anterior"],
+                ["acwr", "ACWR individual"],
+                ["z", "Carga del día anterior (z)"],
+              ] as const
+            ).map(([k, label]) => (
+              <label key={k} className="flex items-center justify-between gap-3 text-sm">
+                <span>{label}</span>
+                <span className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={0}
+                    value={rcfg.weights[k]}
+                    onChange={(e) => setRcfg({ ...rcfg, weights: { ...rcfg.weights, [k]: num(e.target.value) } })}
+                    className="w-16 px-2 py-1 rounded-md border bg-background text-sm text-right tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </span>
+              </label>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-4">
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Verde desde</span>
+              <input
+                type="number"
+                value={rcfg.thresholds.verde}
+                onChange={(e) => setRcfg({ ...rcfg, thresholds: { ...rcfg.thresholds, verde: num(e.target.value) } })}
+                className="w-16 px-2 py-1 rounded-md border bg-background text-sm text-right tabular-nums"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Amarillo desde</span>
+              <input
+                type="number"
+                value={rcfg.thresholds.amarillo}
+                onChange={(e) => setRcfg({ ...rcfg, thresholds: { ...rcfg.thresholds, amarillo: num(e.target.value) } })}
+                className="w-16 px-2 py-1 rounded-md border bg-background text-sm text-right tabular-nums"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Rojo si recuperación ≥</span>
+              <input
+                type="number"
+                value={rcfg.rules.recRojo}
+                onChange={(e) => setRcfg({ ...rcfg, rules: { ...rcfg.rules, recRojo: num(e.target.value) } })}
+                className="w-16 px-2 py-1 rounded-md border bg-background text-sm text-right tabular-nums"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Máx. amarillo si recuperación ≥</span>
+              <input
+                type="number"
+                value={rcfg.rules.recAmarillo}
+                onChange={(e) => setRcfg({ ...rcfg, rules: { ...rcfg.rules, recAmarillo: num(e.target.value) } })}
+                className="w-16 px-2 py-1 rounded-md border bg-background text-sm text-right tabular-nums"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Máx. amarillo si ACWR &gt;</span>
+              <input
+                type="number"
+                step="0.1"
+                value={rcfg.rules.acwrAmarillo}
+                onChange={(e) => setRcfg({ ...rcfg, rules: { ...rcfg.rules, acwrAmarillo: num(e.target.value) } })}
+                className="w-16 px-2 py-1 rounded-md border bg-background text-sm text-right tabular-nums"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Marcar caída vs. su media ≥</span>
+              <input
+                type="number"
+                value={rcfg.dropAlert}
+                onChange={(e) => setRcfg({ ...rcfg, dropAlert: num(e.target.value) })}
+                className="w-16 px-2 py-1 rounded-md border bg-background text-sm text-right tabular-nums"
+              />
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              onClick={handleResetReadiness}
+              className="text-sm px-4 py-2 rounded-md border hover:bg-accent transition-colors"
+            >
+              Restablecer valores por defecto
+            </button>
+            <button
+              onClick={handleSaveReadiness}
+              className="text-sm px-4 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity"
+            >
+              Guardar readiness
             </button>
           </div>
         </div>

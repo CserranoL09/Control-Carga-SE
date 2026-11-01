@@ -33,6 +33,7 @@ import JSZip from "jszip";
 import { MinutosTab } from "@/components/MinutosTab";
 import { ZScoreTab } from "@/components/ZScoreTab";
 import { RecuperacionTab } from "@/components/RecuperacionTab";
+import { ReadinessTab } from "@/components/ReadinessTab";
 import { formatMinutes, playerMinutesSummary } from "@/lib/minutes";
 import type { StoredMinutes } from "@/lib/store";
 import { players as allPlayers } from "@/lib/mock-data";
@@ -44,7 +45,7 @@ const normalizeName = (name: string) =>
     .trim()
     .toUpperCase();
 
-type Tab = "resumen" | "sesiones" | "minutos" | "recuperacion" | "fatiga" | "carga" | "zscore" | "jugadores";
+type Tab = "resumen" | "sesiones" | "minutos" | "recuperacion" | "readiness" | "fatiga" | "carga" | "zscore" | "jugadores";
 
 const tooltipStyle = {
   background: "var(--popover)",
@@ -223,6 +224,7 @@ export default function ConvocatoriaPage() {
     { id: "sesiones", label: "Sesiones" },
     { id: "minutos", label: "Minutos" },
     { id: "recuperacion", label: "Recuperación" },
+    { id: "readiness", label: "Readiness" },
     { id: "fatiga", label: "Control de Fatiga" },
     { id: "carga", label: "Control de Carga" },
     { id: "zscore", label: "Z-Score" },
@@ -350,6 +352,18 @@ export default function ConvocatoriaPage() {
                 formPlayers={players}
                 selectedPlayers={selectedPlayers}
                 sessionMetrics={sessionMetrics}
+                copyButton={(targetId) => <CopyPNGButton targetId={targetId} />}
+              />
+            )}
+            {tab === "readiness" && callUp && (
+              <ReadinessTab
+                sessionMetrics={sessionMetrics}
+                minutes={minutes}
+                recovery={recovery}
+                recoverySupported={recoverySupported}
+                formPlayers={players}
+                selectedPlayers={selectedPlayers}
+                callUpName={callUp.name}
                 copyButton={(targetId) => <CopyPNGButton targetId={targetId} />}
               />
             )}
