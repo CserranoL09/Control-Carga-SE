@@ -301,9 +301,6 @@ export function PlayerReportPDF({
             style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}
           >
             <Escudo />
-            <span style={{ fontSize: "9px", fontWeight: 700, color: C.text, letterSpacing: "1px" }}>
-              CONFIDENCIAL
-            </span>
           </div>
         </div>
 
