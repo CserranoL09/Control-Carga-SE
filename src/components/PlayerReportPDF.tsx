@@ -25,6 +25,8 @@ interface PlayerReportPDFProps {
   sessions: StoredSession[];
   responses: FormResponse[];
   minutes?: StoredMinutes[];
+  /** Observaciones del cuerpo técnico a incluir (ya filtradas y ordenadas) */
+  notes?: { titulo: string; texto: string }[];
   optimo: number;
   moderado: number;
   containerId: string;
@@ -36,6 +38,7 @@ export function PlayerReportPDF({
   sessions,
   responses,
   minutes = [],
+  notes = [],
   optimo,
   moderado,
   containerId,
@@ -375,7 +378,9 @@ export function PlayerReportPDF({
         </div>
 
         {/* MÉTRICAS RESUMEN */}
-        <h2 data-pdf-keep-next style={sectionTitle}>Métricas Resumen de la Convocatoria</h2>
+        <h2 data-pdf-keep-next style={sectionTitle}>
+          Métricas Resumen de la Convocatoria
+        </h2>
         <div
           data-pdf-keep
           style={{
@@ -404,7 +409,43 @@ export function PlayerReportPDF({
         </div>
 
         {/* GRÁFICAS */}
-        <h2 data-pdf-keep-next style={sectionTitle}>Evolución y Gráficas de Control</h2>
+        {notes.length > 0 && (
+          <>
+            <h2 data-pdf-keep-next style={sectionTitle}>
+              Observaciones del cuerpo técnico
+            </h2>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                marginBottom: "24px",
+              }}
+            >
+              {notes.map((n, i) => (
+                <div key={i} data-pdf-keep style={{ ...card, padding: "14px" }}>
+                  {n.titulo && (
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        color: C.text,
+                        marginBottom: n.texto.trim() ? "6px" : 0,
+                      }}
+                    >
+                      {n.titulo}
+                    </div>
+                  )}
+                  <NoteText text={n.texto} />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <h2 data-pdf-keep-next style={sectionTitle}>
+          Evolución y Gráficas de Control
+        </h2>
         <div
           data-pdf-keep
           style={{
@@ -521,7 +562,9 @@ export function PlayerReportPDF({
         </div>
 
         {/* TABLA DE SESIONES */}
-        <h2 data-pdf-keep-next style={sectionTitle}>Registro de Sesiones Individual</h2>
+        <h2 data-pdf-keep-next style={sectionTitle}>
+          Registro de Sesiones Individual
+        </h2>
         <div data-pdf-keep style={{ ...card, overflow: "hidden" }}>
           <table
             style={{
@@ -696,6 +739,50 @@ const C = {
   amber: "#f59e0b",
   red: "#ef4444",
 };
+
+/** Texto de una observación: respeta saltos de línea y convierte "- " en viñetas */
+function NoteText({ text }: { text: string }) {
+  if (!text.trim()) return null;
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const blocks: ({ type: "p"; text: string } | { type: "ul"; items: string[] })[] = [];
+  for (const line of lines) {
+    const bullet = line.match(/^\s*[-•]\s+(.*)$/);
+    const last = blocks[blocks.length - 1];
+    if (bullet) {
+      if (last && last.type === "ul") last.items.push(bullet[1]);
+      else blocks.push({ type: "ul", items: [bullet[1]] });
+    } else if (last && last.type === "p") {
+      last.text += "\n" + line;
+    } else {
+      blocks.push({ type: "p", text: line });
+    }
+  }
+  const base: React.CSSProperties = {
+    fontSize: "11px",
+    lineHeight: 1.5,
+    color: "#e2e8f0",
+    margin: 0,
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+      {blocks.map((b, i) =>
+        b.type === "p" ? (
+          <p key={i} style={{ ...base, whiteSpace: "pre-wrap" }}>
+            {b.text}
+          </p>
+        ) : (
+          <ul key={i} style={{ ...base, paddingLeft: "18px", listStyleType: "disc" }}>
+            {b.items.map((it, j) => (
+              <li key={j} style={{ marginBottom: "2px" }}>
+                {it}
+              </li>
+            ))}
+          </ul>
+        ),
+      )}
+    </div>
+  );
+}
 
 function Escudo() {
   const [src, setSrc] = React.useState(ESCUDO_SRC);

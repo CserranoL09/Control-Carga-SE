@@ -118,6 +118,19 @@ export function samePlayer(a: string, b: string): boolean {
   return normalizePlayerKey(a) === normalizePlayerKey(b);
 }
 
+export interface StoredNote {
+  id: string;
+  callUpId: string;
+  jugador: string;
+  orden: number;
+  titulo: string;
+  texto: string;
+  /** Incluir en el informe PDF */
+  enInforme: boolean;
+  /** ISO, fecha-hora del último guardado (la pone el servidor) */
+  actualizado: string;
+}
+
 export interface StoredRecovery {
   jugador: string;
   /** yyyy-MM-dd */
@@ -136,6 +149,9 @@ interface AllData {
   recovery: StoredRecovery[];
   /** false si el Apps Script desplegado todavía no lee el Sheet de recuperación */
   recoverySupported: boolean;
+  notes: StoredNote[];
+  /** false si el Apps Script desplegado todavía no conoce la hoja "Notas" */
+  notesSupported: boolean;
 }
 
 async function apiGet(): Promise<AllData> {
@@ -184,10 +200,28 @@ async function apiGet(): Promise<AllData> {
     }))
     .filter((r: StoredRecovery) => r.jugador && r.fecha && isFinite(r.valor) && r.valor >= 0 && r.valor <= 10);
 
-  return { callUps, sessions, minutes, minutesSupported, recovery, recoverySupported };
+  const notesSupported = Array.isArray(data.notes);
+  const notes: StoredNote[] = (data.notes ?? [])
+    .map((r: Record<string, string>) => ({
+      id: String(r.id ?? ""),
+      callUpId: String(r.convocatoriaId ?? ""),
+      jugador: String(r.jugador ?? "").trim(),
+      orden: Number(r.orden) || 0,
+      titulo: String(r.titulo ?? ""),
+      texto: String(r.texto ?? ""),
+      enInforme: String(r.enInforme) !== "0" && String(r.enInforme).toLowerCase() !== "false",
+      actualizado: String(r.actualizado ?? ""),
+    }))
+    .filter((n: StoredNote) => n.id && n.jugador);
+
+  return { callUps, sessions, minutes, minutesSupported, recovery, recoverySupported, notes, notesSupported };
 }
 
-async function apiPost(action: "upsert" | "delete", entity: "callup" | "session" | "response" | "minutes", data: object) {
+async function apiPost(
+  action: "upsert" | "delete",
+  entity: "callup" | "session" | "response" | "minutes" | "note",
+  data: object,
+): Promise<Record<string, unknown>> {
   const res = await fetch(getAppsScriptUrl(), {
     method: "POST",
     headers: {
@@ -198,12 +232,37 @@ async function apiPost(action: "upsert" | "delete", entity: "callup" | "session"
   if (!res.ok) throw new Error(`Apps Script POST falló: HTTP ${res.status}`);
   const result = await res.json();
   if (!result.ok) throw new Error(result.error ?? "Error desconocido en Apps Script");
+  return result;
 }
 
 // ─── Fetch all data ───────────────────────────────────────────────────────────
 
 export async function fetchAllData(): Promise<AllData> {
   return apiGet();
+}
+
+// ─── Notas del cuerpo técnico ─────────────────────────────────────────────────
+
+export function newNoteId(): string {
+  return `n-${uid()}`;
+}
+
+/** Guarda (crea o actualiza) una nota. Devuelve la fecha-hora de guardado del servidor. */
+export async function saveNote(note: Omit<StoredNote, "actualizado">): Promise<string> {
+  const res = await apiPost("upsert", "note", {
+    id: note.id,
+    convocatoriaId: note.callUpId,
+    jugador: note.jugador.trim(),
+    orden: String(note.orden),
+    titulo: note.titulo.slice(0, 80),
+    texto: note.texto.slice(0, 2000),
+    enInforme: note.enInforme ? "1" : "0",
+  });
+  return String(res.actualizado ?? new Date().toISOString());
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  await apiPost("delete", "note", { id });
 }
 
 // ─── Minutos de juego ─────────────────────────────────────────────────────────

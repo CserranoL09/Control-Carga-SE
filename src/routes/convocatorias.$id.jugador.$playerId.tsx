@@ -11,6 +11,7 @@ import { AlertTriangle, Download, Loader2 } from "lucide-react";
 import { toPng } from "html-to-image";
 import { jsPDF } from "jspdf";
 import { PlayerReportPDF } from "@/components/PlayerReportPDF";
+import { PlayerNotesEditor, type ReportNote } from "@/components/PlayerNotesEditor";
 import { toast } from "sonner";
 import {
   ResponsiveContainer,
@@ -54,9 +55,12 @@ export default function Page() {
     sessions,
     responses,
     minutes,
+    notes,
+    notesSupported,
     loading,
     error,
   } = useCallUpDashboard(id);
+  const [reportNotes, setReportNotes] = useState<ReportNote[]>([]);
 
   // playerId puede ser el id antiguo de la lista fija (p7) o el nombre del jugador en el Form
   const normalize = (name: string) =>
@@ -309,8 +313,16 @@ export default function Page() {
           </div>
         )}
 
+        <PlayerNotesEditor
+          callUpId={callUp.id}
+          jugador={mockPlayer.name}
+          notes={notes}
+          notesSupported={notesSupported}
+          onReportNotesChange={setReportNotes}
+        />
+
         <div className="grid lg:grid-cols-2 gap-4">
-          <Panel title={`Evolución RPE y Fatiga — {mockPlayer.name}`}>
+          <Panel title={`Evolución RPE y Fatiga — ${mockPlayer.name}`}>
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={data}>
                 <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
@@ -477,6 +489,7 @@ export default function Page() {
           sessions={sessions}
           responses={responses}
           minutes={minutes}
+          notes={reportNotes}
           optimo={optimo}
           moderado={moderado}
           containerId={`pdf-report-${mockPlayer.name.replace(/\s+/g, "-")}`}

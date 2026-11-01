@@ -16,6 +16,8 @@ const SHEET_CALLUPS   = "Convocatorias";              // Hoja de convocatorias
 const SHEET_SESSIONS  = "Sesiones";                   // Hoja de sesiones
 const SHEET_MINUTES   = "Minutos";                    // Hoja de minutos de juego (se crea sola)
 const MINUTES_HEADERS = ["id", "convocatoriaId", "sesionId", "fecha", "jugador", "minutos"];
+const SHEET_NOTES     = "Notas";                      // Observaciones del cuerpo técnico (se crea sola)
+const NOTES_HEADERS   = ["id", "convocatoriaId", "jugador", "orden", "titulo", "texto", "enInforme", "actualizado"];
 
 // Cuestionario matinal de recuperación (OTRO Google Sheet, solo lectura)
 const RECOVERY_SPREADSHEET_ID = "1XvFrD51I9HY4spyLLwxr0VFJ2jlyrcXjyMTIlUhIvMU";
@@ -71,6 +73,7 @@ function doGet(e) {
   const callUps = sheetToObjects(SHEET_CALLUPS);
   const sessions = sheetToObjects(SHEET_SESSIONS);
   const minutes = readMinutes();
+  const notes = sheetToObjects(SHEET_NOTES);
   const recovery = readRecovery();
   const responsesSheet = getResponsesSheet();
 
@@ -79,6 +82,7 @@ function doGet(e) {
     callUps,
     sessions,
     minutes,
+    notes,
     recovery,
     responses: readResponses(responsesSheet),
     responsesSheetName: responsesSheet ? responsesSheet.getName() : null
@@ -149,6 +153,30 @@ function doPost(e) {
     return jsonResponse({ ok: true, saved: rows.length });
   }
 
+  // 3. Observaciones del cuerpo técnico por jugador
+  if (entity === "note") {
+    const sheet = getNotesSheet();
+    if (!data || !data.id) return jsonResponse({ ok: false, error: "Falta el id de la nota" });
+    if (action === "delete") {
+      deleteRow(sheet, data.id);
+      return jsonResponse({ ok: true });
+    }
+    if (action === "upsert") {
+      const actualizado = new Date().toISOString();
+      upsertRow(sheet, {
+        id: String(data.id),
+        convocatoriaId: String(data.convocatoriaId || ""),
+        jugador: String(data.jugador || ""),
+        orden: String(data.orden == null ? 0 : data.orden),
+        titulo: String(data.titulo || "").slice(0, 80),
+        texto: String(data.texto || "").slice(0, 2000),
+        enInforme: data.enInforme === false || data.enInforme === "0" ? "0" : "1",
+        actualizado: actualizado
+      });
+      return jsonResponse({ ok: true, actualizado: actualizado });
+    }
+  }
+
   if (entity !== "callup" && entity !== "session") {
     return jsonResponse({ ok: false, error: "Entidad no reconocida: " + entity });
   }
@@ -172,6 +200,16 @@ function doPost(e) {
   }
 
   return jsonResponse({ ok: false, error: "Acción no reconocida: " + action });
+}
+
+
+// ─── Helpers: Notas ───────────────────────────────────────────
+
+/** Hoja "Notas" con todas las columnas como texto (Sheets no convierte nada). */
+function getNotesSheet() {
+  const sheet = getOrCreateSheet(SHEET_NOTES, NOTES_HEADERS);
+  sheet.getRange("A:H").setNumberFormat("@");
+  return sheet;
 }
 
 

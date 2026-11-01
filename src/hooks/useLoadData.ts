@@ -13,6 +13,7 @@ import {
   type StoredSession,
   type StoredMinutes,
   type StoredRecovery,
+  type StoredNote,
 } from "@/lib/store";
 import {
   calcSessionMetrics,
@@ -64,6 +65,8 @@ export interface CallUpDashboard {
   minutesSupported: boolean;
   recovery: StoredRecovery[];
   recoverySupported: boolean;
+  notes: StoredNote[];
+  notesSupported: boolean;
   loading: boolean;
   error: string | null;
   refresh: () => void;
@@ -77,6 +80,8 @@ export function useCallUpDashboard(callUpId: string | undefined): CallUpDashboar
   const [minutesSupported, setMinutesSupported] = useState(true);
   const [recovery, setRecovery] = useState<StoredRecovery[]>([]);
   const [recoverySupported, setRecoverySupported] = useState(true);
+  const [notes, setNotes] = useState<StoredNote[]>([]);
+  const [notesSupported, setNotesSupported] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,7 +91,7 @@ export function useCallUpDashboard(callUpId: string | undefined): CallUpDashboar
       setError(null);
       try {
         // 1. Obtener convocatorias y sesiones desde Apps Script
-        const { callUps, sessions: allSessions, minutes: allMinutes, minutesSupported: ms, recovery: allRecovery, recoverySupported: rs } = await fetchAllData();
+        const { callUps, sessions: allSessions, minutes: allMinutes, minutesSupported: ms, recovery: allRecovery, recoverySupported: rs, notes: allNotes, notesSupported: ns } = await fetchAllData();
         const cu = callUpId ? callUps.find((c) => c.id === callUpId) : undefined;
         setCallUp(cu);
 
@@ -103,6 +108,10 @@ export function useCallUpDashboard(callUpId: string | undefined): CallUpDashboar
         // Recuperación: solo los días de la convocatoria
         setRecovery(cu ? allRecovery.filter((r) => r.fecha >= cu.startDate && r.fecha <= cu.endDate) : allRecovery);
         setRecoverySupported(rs);
+
+        // Notas del cuerpo técnico de esta convocatoria
+        setNotes(allNotes.filter((n) => n.callUpId === callUpId));
+        setNotesSupported(ns);
 
         // 2. Obtener respuestas del formulario desde el CSV publicado
         const allResponses = await fetchFormResponses(forceRefresh);
@@ -174,6 +183,8 @@ export function useCallUpDashboard(callUpId: string | undefined): CallUpDashboar
     minutesSupported,
     recovery,
     recoverySupported,
+    notes,
+    notesSupported,
     loading,
     error,
     refresh: () => load(true),
