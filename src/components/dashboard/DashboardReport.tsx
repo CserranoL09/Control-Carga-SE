@@ -172,7 +172,6 @@ export function DashboardReport({
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
               <Escudo />
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1 }}>CONFIDENCIAL</span>
             </div>
           </div>
 
