@@ -34,6 +34,7 @@ import { MinutosTab } from "@/components/MinutosTab";
 import { ZScoreTab } from "@/components/ZScoreTab";
 import { RecuperacionTab } from "@/components/RecuperacionTab";
 import { ReadinessTab } from "@/components/ReadinessTab";
+import { DashboardTab } from "@/components/dashboard/DashboardTab";
 import { formatMinutes, playerMinutesSummary } from "@/lib/minutes";
 import type { StoredMinutes } from "@/lib/store";
 import { players as allPlayers } from "@/lib/mock-data";
@@ -45,7 +46,7 @@ const normalizeName = (name: string) =>
     .trim()
     .toUpperCase();
 
-type Tab = "resumen" | "sesiones" | "minutos" | "recuperacion" | "readiness" | "fatiga" | "carga" | "zscore" | "jugadores";
+type Tab = "resumen" | "sesiones" | "minutos" | "recuperacion" | "readiness" | "fatiga" | "carga" | "zscore" | "jugadores" | "dashboard";
 
 const tooltipStyle = {
   background: "var(--popover)",
@@ -229,6 +230,7 @@ export default function ConvocatoriaPage() {
     { id: "carga", label: "Control de Carga" },
     { id: "zscore", label: "Z-Score" },
     { id: "jugadores", label: "Jugadores" },
+    { id: "dashboard", label: "Dashboard" },
   ];
 
   return (
@@ -364,6 +366,21 @@ export default function ConvocatoriaPage() {
                 formPlayers={players}
                 selectedPlayers={selectedPlayers}
                 callUpName={callUp.name}
+                copyButton={(targetId) => <CopyPNGButton targetId={targetId} />}
+              />
+            )}
+            {tab === "dashboard" && callUp && (
+              <DashboardTab
+                callUpId={callUp.id}
+                callUpName={callUp.name}
+                location={callUp.location}
+                startDate={callUp.startDate}
+                endDate={callUp.endDate}
+                sessionMetrics={sessionMetrics}
+                minutes={minutes}
+                recovery={recovery}
+                formPlayers={players}
+                selectedPlayers={selectedPlayers}
                 copyButton={(targetId) => <CopyPNGButton targetId={targetId} />}
               />
             )}
