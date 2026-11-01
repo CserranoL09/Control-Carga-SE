@@ -290,17 +290,34 @@ export default function ConvocatoriaPage() {
             </button> */}
           </div>
         </div>
-        <div className="mt-5 flex gap-1 -mb-6">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`px-4 py-2 text-sm border-b-2 transition-colors ${tab === t.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Índice de apartados: tarjetas que se reparten el ancho; la activa, en relieve */}
+        <div className="@container mt-6">
+          <div
+            role="tablist"
+            aria-label="Apartados de la convocatoria"
+            className="flex gap-2 overflow-x-auto snap-x pb-2 sm:grid sm:overflow-visible sm:pb-0"
+            style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+          >
+            {tabs.map((t) => {
+              const active = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setTab(t.id)}
+                  title={t.label}
+                  className={`relative snap-start shrink-0 sm:shrink min-w-0 rounded-lg border px-2 py-2.5 text-center leading-tight font-medium whitespace-nowrap sm:whitespace-normal text-[13px] sm:text-[clamp(11px,1.25cqi,14px)] transition-all duration-200 ${
+                    active
+                      ? "-translate-y-1 border-primary/70 bg-gradient-to-b from-primary/25 to-card text-foreground font-semibold shadow-[0_10px_24px_-8px_rgba(0,0,0,0.65),0_0_0_1px_var(--primary)] after:absolute after:inset-x-3 after:-bottom-px after:h-[3px] after:rounded-full after:bg-primary"
+                      : "border-border/60 bg-card/50 text-muted-foreground shadow-sm hover:-translate-y-0.5 hover:bg-card hover:text-foreground hover:border-border"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
