@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
+import { getPlayerPhoto } from "@/lib/player-photos";
 import { players } from "@/lib/mock-data";
 import {
   Dialog,
@@ -40,9 +41,17 @@ export default function Jugadores() {
         <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {players.map((p) => (
             <div key={p.id} className="rounded-lg border bg-card p-4 flex items-center gap-3">
-              <div className="size-10 rounded-full bg-accent grid place-items-center font-semibold">
-                {p.number}
-              </div>
+                 {getPlayerPhoto(p.name) ? (
+                   <img
+                     src={getPlayerPhoto(p.name)}
+                     alt={p.name}
+                     className="size-10 rounded-full object-cover border-2 border-border"
+                   />
+                 ) : (
+                   <div className="size-10 rounded-full bg-accent grid place-items-center font-semibold">
+                     {p.number}
+                   </div>
+                 )}
               <div>
                 <div className="text-sm font-medium">{p.name}</div>
                 <div className="text-xs text-muted-foreground">{p.position}</div>
