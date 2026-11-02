@@ -72,7 +72,7 @@ import { toBlob, toPng } from "html-to-image";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import { PlayerReportPDF } from "@/components/PlayerReportPDF";
-import { getPlayerPhoto } from "@/lib/player-photos";
+import { CardAvatar, MiniStat } from "@/components/PlayerCardParts";
 import { exportElementToPdf, renderElementToPdfBlob, downloadBlob } from "@/lib/pdf-export";
 import JSZip from "jszip";
 import { MinutosTab } from "@/components/MinutosTab";
@@ -1655,36 +1655,6 @@ function PlayerCard({
   );
 }
 
-/** Foto pequeña en la tarjeta: permite ver de un vistazo qué jugadores no tienen foto. */
-function CardAvatar({ name }: { name: string }) {
-  const src = getPlayerPhoto(name);
-  const [failed, setFailed] = useState(false);
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join("");
-  if (!src || failed) {
-    return (
-      <div
-        className="size-9 shrink-0 rounded-full border border-dashed grid place-items-center text-[11px] font-semibold text-muted-foreground"
-        title="Sin foto: revisa src/lib/player-photos.ts"
-      >
-        {initials}
-      </div>
-    );
-  }
-  return (
-    <img
-      src={src}
-      alt={name}
-      onError={() => setFailed(true)}
-      className="size-9 shrink-0 rounded-full object-cover border"
-    />
-  );
-}
-
 // ─── Heatmap ──────────────────────────────────────────────────────────────────
 
 function FatigaHeatmap({
@@ -2574,17 +2544,6 @@ function MetricCard({
         {value}
       </div>
       {hint && <div className="text-[11px] text-muted-foreground mt-1">{hint}</div>}
-    </div>
-  );
-}
-
-function MiniStat({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div>
-      <div className="text-muted-foreground">{label}</div>
-      <div className="font-semibold tabular-nums" style={color ? { color } : undefined}>
-        {value}
-      </div>
     </div>
   );
 }

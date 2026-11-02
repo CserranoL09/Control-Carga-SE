@@ -13,6 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import type { SessionMetrics } from "@/lib/metrics";
+import { RecuperacionTarjetas } from "@/components/RecuperacionTarjetas";
 import type { StoredRecovery } from "@/lib/store";
 import {
   buildRecovery,
@@ -277,6 +278,15 @@ export function RecuperacionTab({
           )}
         </div>
       )}
+
+      {/* Tarjetas por jugador */}
+      <RecuperacionTarjetas
+        data={data}
+        dia={dia}
+        players={shown}
+        copyButton={copyButton}
+        horaOf={hora}
+      />
 
       {/* b) Heatmap jugadores × días */}
       <section className="space-y-2">
