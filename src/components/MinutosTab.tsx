@@ -10,6 +10,7 @@ import {
   type StoredSession,
 } from "@/lib/store";
 import { formatMinutes, parseMinutesInput } from "@/lib/minutes";
+import { getPlayerPhoto } from "@/lib/player-photos";
 
 interface MinutosTabProps {
   callUpId: string;
@@ -28,7 +29,14 @@ function formatDateShortES(iso: string) {
   return d && m ? `${d}/${m}` : iso;
 }
 
-export function MinutosTab({ callUpId, sessions, players, minutes, minutesSupported, onSaved }: MinutosTabProps) {
+export function MinutosTab({
+  callUpId,
+  sessions,
+  players,
+  minutes,
+  minutesSupported,
+  onSaved,
+}: MinutosTabProps) {
   const matches = useMemo(() => sessions.filter(isMatchSession), [sessions]);
   const [extraPlayers, setExtraPlayers] = useState<string[]>([]);
   const [newPlayer, setNewPlayer] = useState("");
@@ -89,7 +97,12 @@ export function MinutosTab({ callUpId, sessions, players, minutes, minutesSuppor
         const k = cellKey(s.id, j);
         if (!dirtyKeys.includes(k)) continue;
         const parsed = parseMinutesInput(draft[k] ?? "");
-        rows.push({ callUpId, session: s, jugador: j, minutes: parsed === null || Number.isNaN(parsed) ? null : parsed });
+        rows.push({
+          callUpId,
+          session: s,
+          jugador: j,
+          minutes: parsed === null || Number.isNaN(parsed) ? null : parsed,
+        });
       }
     }
     if (rows.length === 0) return;
@@ -112,9 +125,10 @@ export function MinutosTab({ callUpId, sessions, players, minutes, minutesSuppor
         <div>
           <div className="font-medium">Falta actualizar el Apps Script</div>
           <p className="mt-1 text-xs">
-            Para guardar minutos, pega el nuevo <code>apps-script/Code.gs</code> en el editor de Apps Script del Sheet
-            y publica una nueva versión del despliegue (Implementar → Gestionar implementaciones → Editar → Nueva versión).
-            La app no tocará la hoja de respuestas: solo creará una pestaña nueva llamada "Minutos".
+            Para guardar minutos, pega el nuevo <code>apps-script/Code.gs</code> en el editor de
+            Apps Script del Sheet y publica una nueva versión del despliegue (Implementar →
+            Gestionar implementaciones → Editar → Nueva versión). La app no tocará la hoja de
+            respuestas: solo creará una pestaña nueva llamada "Minutos".
           </p>
         </div>
       </div>
@@ -124,10 +138,20 @@ export function MinutosTab({ callUpId, sessions, players, minutes, minutesSuppor
   if (matches.length === 0) {
     return (
       <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
-        No hay partidos en esta convocatoria. Crea una sesión de tipo PARTIDO en la pestaña Sesiones para registrar minutos.
+        No hay partidos en esta convocatoria. Crea una sesión de tipo PARTIDO en la pestaña Sesiones
+        para registrar minutos.
       </div>
     );
   }
+
+  // Totales en vivo (mismos valores que "Total"): comparación y evolución
+  const totals = new Map(roster.map((j) => [j, matches.reduce((a, s) => a + valueOf(s.id, j), 0)]));
+  const maxTotal = Math.max(0, ...totals.values());
+  const withMinutes = [...totals.values()].filter((t) => t > 0);
+  const teamMean = withMinutes.length
+    ? withMinutes.reduce((a, b) => a + b, 0) / withMinutes.length
+    : 0;
+  const maxMatch = Math.max(0, ...roster.flatMap((j) => matches.map((s) => valueOf(s.id, j))));
 
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
@@ -173,7 +197,13 @@ export function MinutosTab({ callUpId, sessions, players, minutes, minutesSuppor
             disabled={saving || dirtyKeys.length === 0}
             className="text-xs flex items-center gap-1.5 px-3 py-2 rounded-md bg-primary text-primary-foreground font-medium hover:opacity-90 disabled:opacity-50"
           >
-            {saving ? <Loader2 className="size-3.5 animate-spin" /> : dirtyKeys.length === 0 ? <Check className="size-3.5" /> : <Save className="size-3.5" />}
+            {saving ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : dirtyKeys.length === 0 ? (
+              <Check className="size-3.5" />
+            ) : (
+              <Save className="size-3.5" />
+            )}
             {dirtyKeys.length === 0 ? "Guardado" : `Guardar (${dirtyKeys.length})`}
           </button>
         </div>
@@ -188,15 +218,21 @@ export function MinutosTab({ callUpId, sessions, players, minutes, minutesSuppor
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-xs text-muted-foreground">
               <tr>
-                <th className="text-left font-medium px-3 py-2 sticky left-0 bg-muted/40 min-w-[170px]">Jugador</th>
+                <th className="text-left font-medium px-3 py-2 sticky left-0 z-10 bg-card min-w-[220px] shadow-[1px_0_0_var(--border)]">
+                  Jugador
+                </th>
                 {matches.map((s) => (
                   <th key={s.id} className="text-center font-medium px-2 py-2 min-w-[96px]">
-                    <div>{formatDateShortES(s.date)}{s.dayLabel ? ` ${s.dayLabel}` : ""}</div>
+                    <div>
+                      {formatDateShortES(s.date)}
+                      {s.dayLabel ? ` ${s.dayLabel}` : ""}
+                    </div>
                     <div className="text-[10px] font-normal">{s.type}</div>
                   </th>
                 ))}
                 <th className="text-right font-medium px-3 py-2 min-w-[80px]">Total</th>
                 <th className="text-right font-medium px-3 py-2 min-w-[80px]">Media</th>
+                <th className="text-left font-medium px-3 py-2 min-w-[260px]">Comparativa</th>
               </tr>
             </thead>
             <tbody>
@@ -206,13 +242,18 @@ export function MinutosTab({ callUpId, sessions, players, minutes, minutesSuppor
                 const total = played.reduce((a, b) => a + b, 0);
                 return (
                   <tr key={j} className="border-t hover:bg-muted/20">
-                    <td className="px-3 py-1.5 font-medium sticky left-0 bg-card">{j}</td>
+                    <td className="px-3 py-2 sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">
+                      <div className="flex items-center gap-3">
+                        <PlayerPhoto name={j} />
+                        <span className="font-semibold">{j}</span>
+                      </div>
+                    </td>
                     {matches.map((s) => {
                       const k = cellKey(s.id, j);
                       const isDirty = dirtyKeys.includes(k);
                       const isInvalid = invalidKeys.has(k);
                       return (
-                        <td key={s.id} className="px-2 py-1.5">
+                        <td key={s.id} className="px-2 py-2">
                           <Input
                             inputMode="decimal"
                             value={draft[k] ?? ""}
@@ -220,7 +261,8 @@ export function MinutosTab({ callUpId, sessions, players, minutes, minutesSuppor
                             onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
                             onBlur={(e) => {
                               const v = parseMinutesInput(e.target.value);
-                              if (v !== null && !Number.isNaN(v)) setDraft((d) => ({ ...d, [k]: formatMinutes(v) }));
+                              if (v !== null && !Number.isNaN(v))
+                                setDraft((d) => ({ ...d, [k]: formatMinutes(v) }));
                             }}
                             aria-label={`Minutos de ${j} el ${s.date}`}
                             aria-invalid={isInvalid}
@@ -229,9 +271,23 @@ export function MinutosTab({ callUpId, sessions, players, minutes, minutesSuppor
                         </td>
                       );
                     })}
-                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{total > 0 ? formatMinutes(total) : "—"}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                      {total > 0 ? formatMinutes(total) : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
                       {played.length > 0 ? formatMinutes(total / played.length) : "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <MinutesComparison
+                        total={total}
+                        maxTotal={maxTotal}
+                        teamMean={teamMean}
+                        perMatch={matches.map((s, i) => ({
+                          label: formatDateShortES(s.date) + (s.dayLabel ? ` ${s.dayLabel}` : ""),
+                          value: values[i],
+                        }))}
+                        maxMatch={maxMatch}
+                      />
                     </td>
                   </tr>
                 );
@@ -248,10 +304,108 @@ export function MinutosTab({ callUpId, sessions, players, minutes, minutesSuppor
                     </td>
                   );
                 })}
-                <td colSpan={2} />
+                <td colSpan={3} />
               </tr>
             </tfoot>
           </table>
+          <p className="px-4 py-2 text-[11px] text-muted-foreground border-t">
+            Barra: minutos totales respecto al que más ha jugado · línea discontinua: media del
+            equipo · mini barras: minutos por partido
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Foto del jugador ─────────────────────────────────────────────────────────
+
+function PlayerPhoto({ name }: { name: string }) {
+  const [failed, setFailed] = useState(false);
+  const src = getPlayerPhoto(name);
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("");
+  if (!src || failed) {
+    return (
+      <div className="size-10 shrink-0 rounded-full border-2 border-border bg-muted text-muted-foreground grid place-items-center text-xs font-semibold shadow-sm">
+        {initials}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={name}
+      onError={() => setFailed(true)}
+      className="size-10 shrink-0 rounded-full object-cover border-2 border-border shadow-sm"
+    />
+  );
+}
+
+// ─── Barra roja de comparación + mini barras de evolución ────────────────────
+
+function MinutesComparison({
+  total,
+  maxTotal,
+  teamMean,
+  perMatch,
+  maxMatch,
+}: {
+  total: number;
+  maxTotal: number;
+  teamMean: number;
+  perMatch: { label: string; value: number }[];
+  maxMatch: number;
+}) {
+  const pct = maxTotal > 0 ? (total / maxTotal) * 100 : 0;
+  const meanPct = maxTotal > 0 ? (teamMean / maxTotal) * 100 : 0;
+  const above = total >= teamMean;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <div className="relative h-2.5 flex-1 rounded-full bg-muted/40">
+          {total > 0 && (
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-[#dc2626] transition-all duration-300"
+              style={{ width: `${pct}%`, opacity: above ? 1 : 0.55 }}
+              title={`${formatMinutes(total)} · ${Math.round(pct)} % del máximo`}
+            />
+          )}
+          {teamMean > 0 && (
+            <div
+              className="absolute -top-1 -bottom-1 border-l-2 border-dashed border-white/90"
+              style={{ left: `calc(${meanPct}% - 1px)` }}
+              title={`Media equipo: ${formatMinutes(teamMean)}`}
+            />
+          )}
+        </div>
+        <span className="w-10 text-right text-[11px] tabular-nums text-muted-foreground">
+          {total > 0 ? `${Math.round(pct)} %` : "—"}
+        </span>
+      </div>
+      {perMatch.length > 0 && (
+        <div
+          className="flex items-end gap-1.5 h-6 border-b border-border/60 w-fit pr-1"
+          aria-label="Minutos por partido"
+        >
+          {perMatch.map((m, i) => (
+            <div
+              key={i}
+              title={`${m.label}: ${m.value > 0 ? formatMinutes(m.value) : "sin minutos"}`}
+              className={`w-2.5 shrink-0 rounded-t-sm transition-all duration-300 ${m.value > 0 ? "bg-[#dc2626]" : "bg-muted-foreground/40"}`}
+              style={{
+                height:
+                  m.value > 0 && maxMatch > 0
+                    ? `${Math.max(3, (m.value / maxMatch) * 24)}px`
+                    : "2px",
+              }}
+            />
+          ))}
         </div>
       )}
     </div>
