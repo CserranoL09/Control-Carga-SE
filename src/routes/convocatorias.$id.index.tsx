@@ -3,26 +3,71 @@ import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
 import { useCallUpDashboard } from "@/hooks/useLoadData";
 import {
-  saveSession, deleteSession, updateSession, SESSION_TYPES, type StoredSession, type SessionType, type DayLabel, getLoadThresholds,
-  updateCallUp, type StoredCallUp, savePlayerResponse, deletePlayerResponse,
+  saveSession,
+  deleteSession,
+  updateSession,
+  SESSION_TYPES,
+  type StoredSession,
+  type SessionType,
+  type DayLabel,
+  getLoadThresholds,
+  updateCallUp,
+  type StoredCallUp,
+  savePlayerResponse,
+  deletePlayerResponse,
 } from "@/lib/store";
 import { avg, acwrStatus, uaStatus, statusColor, calcACWRSeries } from "@/lib/metrics";
 import {
-  ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend, ReferenceArea, ReferenceLine, Cell,
-  ComposedChart, LabelList,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ReferenceArea,
+  ReferenceLine,
+  Cell,
+  ComposedChart,
+  LabelList,
 } from "recharts";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import { AlertTriangle, Download, RefreshCw, Plus, Trash2, Loader2, Users, Pencil, Check, X, Copy } from "lucide-react";
+import {
+  AlertTriangle,
+  Download,
+  RefreshCw,
+  Plus,
+  Trash2,
+  Loader2,
+  Users,
+  Pencil,
+  Check,
+  X,
+  Copy,
+} from "lucide-react";
 import { toBlob, toPng } from "html-to-image";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
@@ -46,7 +91,17 @@ const normalizeName = (name: string) =>
     .trim()
     .toUpperCase();
 
-type Tab = "resumen" | "sesiones" | "minutos" | "recuperacion" | "readiness" | "fatiga" | "carga" | "zscore" | "jugadores" | "dashboard";
+type Tab =
+  | "resumen"
+  | "sesiones"
+  | "minutos"
+  | "recuperacion"
+  | "readiness"
+  | "fatiga"
+  | "carga"
+  | "zscore"
+  | "jugadores"
+  | "dashboard";
 
 const tooltipStyle = {
   background: "var(--popover)",
@@ -76,7 +131,7 @@ export default function ConvocatoriaPage() {
     error,
     refresh,
     updateResponseLocally,
-    updateSessionLocally
+    updateSessionLocally,
   } = useCallUpDashboard(id);
   const [tab, setTab] = useState<Tab>("resumen");
   const [sessionRefreshKey, setSessionRefreshKey] = useState(0);
@@ -101,7 +156,10 @@ export default function ConvocatoriaPage() {
   /** Genera el PDF de un jugador. Con `asBlob` lo devuelve en vez de descargarlo. */
   async function generatePlayerPDF(playerName: string): Promise<void>;
   async function generatePlayerPDF(playerName: string, asBlob: true): Promise<Blob | null>;
-  async function generatePlayerPDF(playerName: string, asBlob = false): Promise<Blob | null | void> {
+  async function generatePlayerPDF(
+    playerName: string,
+    asBlob = false,
+  ): Promise<Blob | null | void> {
     setExportingPlayer(playerName);
     // Wait for Recharts SVG to render with animations disabled
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -129,7 +187,7 @@ export default function ConvocatoriaPage() {
   async function handleBulkExport() {
     setIsBulkExporting(true);
     const targetPlayers = selectedPlayers.length === 0 ? players : selectedPlayers;
-    
+
     if (targetPlayers.length === 0) {
       toast.error("No hay jugadores para exportar");
       setIsBulkExporting(false);
@@ -156,7 +214,9 @@ export default function ConvocatoriaPage() {
       let ok = 0;
       for (let i = 0; i < targetPlayers.length; i++) {
         const pName = targetPlayers[i];
-        toast.loading(`Generando informe de ${pName} (${i + 1}/${targetPlayers.length})...`, { id: toastId });
+        toast.loading(`Generando informe de ${pName} (${i + 1}/${targetPlayers.length})...`, {
+          id: toastId,
+        });
         const blob = await generatePlayerPDF(pName, true);
         if (blob) {
           folder.file(reportFileName(pName), blob);
@@ -189,28 +249,54 @@ export default function ConvocatoriaPage() {
     const filteredRPEs = activePlayers
       .map((p) => sm.playerRPE[p])
       .filter((v): v is number => v !== undefined);
-    const fatigaMedia = filteredFatigues.length > 0
-      ? +(filteredFatigues.reduce((a, b) => a + b, 0) / filteredFatigues.length).toFixed(2)
-      : 0;
-    const rpeMedia = filteredRPEs.length > 0
-      ? +(filteredRPEs.reduce((a, b) => a + b, 0) / filteredRPEs.length).toFixed(2)
-      : 0;
+    const fatigaMedia =
+      filteredFatigues.length > 0
+        ? +(filteredFatigues.reduce((a, b) => a + b, 0) / filteredFatigues.length).toFixed(2)
+        : 0;
+    const rpeMedia =
+      filteredRPEs.length > 0
+        ? +(filteredRPEs.reduce((a, b) => a + b, 0) / filteredRPEs.length).toFixed(2)
+        : 0;
     const fatigaXTiempo = +(fatigaMedia * sm.duration).toFixed(0);
     const rpeXTiempo = +(rpeMedia * sm.duration).toFixed(0);
-    const playerFatigue = Object.fromEntries(activePlayers.map((p) => [p, sm.playerFatigue[p]]).filter(([, v]) => v !== undefined));
-    const playerRPE = Object.fromEntries(activePlayers.map((p) => [p, sm.playerRPE[p]]).filter(([, v]) => v !== undefined));
-    const playerUA = Object.fromEntries(activePlayers.map((p) => [p, sm.playerUA[p]]).filter(([, v]) => v !== undefined));
-    const playerRpeUA = Object.fromEntries(activePlayers.map((p) => [p, sm.playerRpeUA[p]]).filter(([, v]) => v !== undefined));
-    return { ...sm, fatigaMedia, rpeMedia, fatigaXTiempo, rpeXTiempo, responseCount: filteredFatigues.length, playerFatigue, playerRPE, playerUA, playerRpeUA };
+    const playerFatigue = Object.fromEntries(
+      activePlayers.map((p) => [p, sm.playerFatigue[p]]).filter(([, v]) => v !== undefined),
+    );
+    const playerRPE = Object.fromEntries(
+      activePlayers.map((p) => [p, sm.playerRPE[p]]).filter(([, v]) => v !== undefined),
+    );
+    const playerUA = Object.fromEntries(
+      activePlayers.map((p) => [p, sm.playerUA[p]]).filter(([, v]) => v !== undefined),
+    );
+    const playerRpeUA = Object.fromEntries(
+      activePlayers.map((p) => [p, sm.playerRpeUA[p]]).filter(([, v]) => v !== undefined),
+    );
+    return {
+      ...sm,
+      fatigaMedia,
+      rpeMedia,
+      fatigaXTiempo,
+      rpeXTiempo,
+      responseCount: filteredFatigues.length,
+      playerFatigue,
+      playerRPE,
+      playerUA,
+      playerRpeUA,
+    };
   });
 
   const completedFilteredSessionMetrics = filteredSessionMetrics.filter((s) => s.duration > 0);
-  const filteredAcwrSeries = calcACWRSeries(completedFilteredSessionMetrics.map((s) => ({ date: s.date, ua: s.fatigaXTiempo })));
-  const filteredAcwrSeriesRpe = calcACWRSeries(completedFilteredSessionMetrics.map((s) => ({ date: s.date, ua: s.rpeXTiempo })));
+  const filteredAcwrSeries = calcACWRSeries(
+    completedFilteredSessionMetrics.map((s) => ({ date: s.date, ua: s.fatigaXTiempo })),
+  );
+  const filteredAcwrSeriesRpe = calcACWRSeries(
+    completedFilteredSessionMetrics.map((s) => ({ date: s.date, ua: s.rpeXTiempo })),
+  );
 
-  const filteredPlayerMetrics = selectedPlayers.length === 0
-    ? playerMetrics
-    : playerMetrics.filter((p) => selectedPlayers.includes(p.jugador));
+  const filteredPlayerMetrics =
+    selectedPlayers.length === 0
+      ? playerMetrics
+      : playerMetrics.filter((p) => selectedPlayers.includes(p.jugador));
   // ─────────────────────────────────────────────────────────────────────────
 
   if (!callUp && !loading) {
@@ -236,10 +322,12 @@ export default function ConvocatoriaPage() {
 
   return (
     <AppLayout>
-      <div className="px-8 py-6 border-b">
+      <div className={`px-8 pt-6 border-b ${tab === "minutos" ? "pb-3" : "pb-6"}`}>
         <div className="flex items-end justify-between">
           <div>
-            <Link to="/" className="text-xs text-muted-foreground hover:text-foreground">← Convocatorias</Link>
+            <Link to="/" className="text-xs text-muted-foreground hover:text-foreground">
+              ← Convocatorias
+            </Link>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">{callUp?.name ?? "…"}</h1>
             {callUp && (
               <p className="text-sm text-muted-foreground">
@@ -275,9 +363,7 @@ export default function ConvocatoriaPage() {
                 </span>
               </button>
             )}
-            {callUp && (
-              <EditarConvocatoriaDialog callUp={callUp} onUpdated={refreshAll} />
-            )}
+            {callUp && <EditarConvocatoriaDialog callUp={callUp} onUpdated={refreshAll} />}
             <button
               onClick={refreshAll}
               className="text-xs flex items-center gap-1.5 px-3 py-2 rounded-md border hover:bg-accent"
@@ -321,7 +407,7 @@ export default function ConvocatoriaPage() {
         </div>
       </div>
 
-      <div className="px-8 py-6 space-y-6">
+      <div className={`px-8 pb-6 space-y-6 ${tab === "minutos" ? "pt-3" : "pt-6"}`}>
         {error && (
           <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs text-yellow-700 dark:text-yellow-300 flex items-center gap-2">
             <AlertTriangle className="size-4 shrink-0" />
@@ -363,6 +449,8 @@ export default function ConvocatoriaPage() {
                 minutes={minutes}
                 minutesSupported={minutesSupported}
                 onSaved={refreshAll}
+                copyButton={(targetId) => <CopyPNGButton targetId={targetId} />}
+                selectedPlayers={selectedPlayers}
               />
             )}
             {tab === "recuperacion" && (
@@ -445,7 +533,12 @@ export default function ConvocatoriaPage() {
           responses={responses}
           minutes={minutes}
           notes={notes
-            .filter((n) => n.enInforme && samePlayer(n.jugador, exportingPlayer) && (n.titulo.trim() || n.texto.trim()))
+            .filter(
+              (n) =>
+                n.enInforme &&
+                samePlayer(n.jugador, exportingPlayer) &&
+                (n.titulo.trim() || n.texto.trim()),
+            )
             .sort((a, b) => a.orden - b.orden)
             .map((n) => ({ titulo: n.titulo.trim(), texto: n.texto }))}
           optimo={optimo}
@@ -474,7 +567,13 @@ function TTRow({ label, value, color }: { label: string; value: string; color?: 
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 16, marginBottom: 3 }}>
       <span style={{ color: "var(--muted-foreground)" }}>{label}</span>
-      <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 500, color: color ?? "var(--popover-foreground)" }}>
+      <span
+        style={{
+          fontVariantNumeric: "tabular-nums",
+          fontWeight: 500,
+          color: color ?? "var(--popover-foreground)",
+        }}
+      >
         {value}
       </span>
     </div>
@@ -485,7 +584,11 @@ function TTDivider() {
   return <div style={{ borderTop: "1px solid var(--border)", margin: "5px 0" }} />;
 }
 
-function FatigaTooltip({ active, payload, label }: {
+function FatigaTooltip({
+  active,
+  payload,
+  label,
+}: {
   active?: boolean;
   payload?: Array<{ name: string; value: number; color: string }>;
   label?: string;
@@ -494,7 +597,8 @@ function FatigaTooltip({ active, payload, label }: {
   const fatiga = payload.find((p) => p.name === "Fatiga");
   const rpe = payload.find((p) => p.name === "RPE");
   const fatVal = fatiga?.value ?? 0;
-  const fatColor = fatVal >= 7 ? "var(--danger)" : fatVal >= 4 ? "var(--warning)" : "var(--success)";
+  const fatColor =
+    fatVal >= 7 ? "var(--danger)" : fatVal >= 4 ? "var(--warning)" : "var(--success)";
 
   return (
     <div style={TT_STYLE}>
@@ -505,16 +609,25 @@ function FatigaTooltip({ active, payload, label }: {
   );
 }
 
-function UATooltip({ active, payload, label, optimo, moderado }: {
+function UATooltip({
+  active,
+  payload,
+  label,
+  optimo,
+  moderado,
+}: {
   active?: boolean;
-  payload?: Array<{ payload: { label: string; ua: number; fatigaMedia: number; duration: number; tipo: string } }>;
+  payload?: Array<{
+    payload: { label: string; ua: number; fatigaMedia: number; duration: number; tipo: string };
+  }>;
   label?: string;
   optimo: number;
   moderado: number;
 }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
-  const uaColor = d.ua >= moderado ? "var(--danger)" : d.ua >= optimo ? "var(--warning)" : "var(--success)";
+  const uaColor =
+    d.ua >= moderado ? "var(--danger)" : d.ua >= optimo ? "var(--warning)" : "var(--success)";
 
   return (
     <div style={TT_STYLE}>
@@ -533,16 +646,25 @@ function UATooltip({ active, payload, label, optimo, moderado }: {
   );
 }
 
-function UATooltipCarga({ active, payload, label, optimo, moderado }: {
+function UATooltipCarga({
+  active,
+  payload,
+  label,
+  optimo,
+  moderado,
+}: {
   active?: boolean;
-  payload?: Array<{ payload: { label: string; ua: number; rpeMedia: number; duration: number; tipo: string } }>;
+  payload?: Array<{
+    payload: { label: string; ua: number; rpeMedia: number; duration: number; tipo: string };
+  }>;
   label?: string;
   optimo: number;
   moderado: number;
 }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
-  const uaColor = d.ua >= moderado ? "var(--danger)" : d.ua >= optimo ? "var(--warning)" : "var(--success)";
+  const uaColor =
+    d.ua >= moderado ? "var(--danger)" : d.ua >= optimo ? "var(--warning)" : "var(--success)";
 
   return (
     <div style={TT_STYLE}>
@@ -561,7 +683,11 @@ function UATooltipCarga({ active, payload, label, optimo, moderado }: {
   );
 }
 
-function ACWRTooltip({ active, payload, label }: {
+function ACWRTooltip({
+  active,
+  payload,
+  label,
+}: {
   active?: boolean;
   payload?: Array<{ payload: { label: string; acwr: number; aguda: number; cronica: number } }>;
   label?: string;
@@ -628,7 +754,6 @@ function formatDateESZeroPadded(dateStr: string): string {
 
 // ─── Syncing overlay ─────────────────────────────────────────────────────────
 
-
 function SyncingOverlay() {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
@@ -668,7 +793,12 @@ function ResumenTab({
   sessions: StoredSession[];
   onSessionUpdated?: () => void;
   onResponseUpdated?: () => void;
-  updateResponseLocally: (jugador: string, fecha: string, fatigue: number | null, rpe: number | null) => void;
+  updateResponseLocally: (
+    jugador: string,
+    fecha: string,
+    fatigue: number | null,
+    rpe: number | null,
+  ) => void;
   updateSessionLocally: (sessionId: string, duration: number) => void;
 }) {
   const { optimo, moderado } = getLoadThresholds();
@@ -704,9 +834,17 @@ function ResumenTab({
     <>
       {/* 4 Cards de metricas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard label="Fatiga Media Equipo" value={teamFatMedia.toFixed(1)} hint="Escala 1–10" />
+        <MetricCard
+          label="Fatiga Media Equipo"
+          value={teamFatMedia.toFixed(1)}
+          hint="Escala 1–10"
+        />
         <MetricCard label="RPE Medio Equipo" value={teamRpeMedia.toFixed(1)} hint="Escala 1–10" />
-        <MetricCard label="Carga Total (UA)" value={Math.round(teamUATotal).toLocaleString()} hint={`${completedMetrics.length} sesiones`} />
+        <MetricCard
+          label="Carga Total (UA)"
+          value={Math.round(teamUATotal).toLocaleString()}
+          hint={`${completedMetrics.length} sesiones`}
+        />
         <MetricCard
           label="Ratio ACWR Equipo"
           value={acwr.toFixed(2)}
@@ -717,7 +855,8 @@ function ResumenTab({
 
       {players.length === 0 && (
         <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-          Sin respuestas del formulario en este rango de fechas. Los jugadores aparecerán aquí cuando respondan.
+          Sin respuestas del formulario en este rango de fechas. Los jugadores aparecerán aquí
+          cuando respondan.
         </div>
       )}
 
@@ -725,7 +864,8 @@ function ResumenTab({
       {highFatigueAlerts.length > 0 && (
         <div className="rounded-lg border border-[color:var(--danger)]/40 bg-[color:var(--danger)]/10 p-4">
           <div className="flex items-center gap-2 text-[color:var(--danger)] text-sm font-medium">
-            <AlertTriangle className="size-4" /> {highFatigueAlerts.length} jugador(es) con ratio ACWR {">"} 1.5: {highFatigueAlerts.map((p) => p.jugador).join(", ")}
+            <AlertTriangle className="size-4" /> {highFatigueAlerts.length} jugador(es) con ratio
+            ACWR {">"} 1.5: {highFatigueAlerts.map((p) => p.jugador).join(", ")}
           </div>
         </div>
       )}
@@ -733,7 +873,11 @@ function ResumenTab({
       {/* Selector de vista: Fatiga / Carga */}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <div className="inline-flex rounded-md border p-0.5 bg-muted/30" role="group" aria-label="Vista del resumen">
+          <div
+            className="inline-flex rounded-md border p-0.5 bg-muted/30"
+            role="group"
+            aria-label="Vista del resumen"
+          >
             {(["fatiga", "carga"] as const).map((v) => (
               <button
                 key={v}
@@ -741,7 +885,9 @@ function ResumenTab({
                 onClick={() => setVista(v)}
                 aria-pressed={vista === v}
                 className={`px-4 py-1.5 text-sm rounded font-medium transition-colors ${
-                  vista === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                  vista === v
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {v === "fatiga" ? "Fatiga" : "Carga"}
@@ -751,7 +897,9 @@ function ResumenTab({
           {players.length > 0 && <CopyPNGButton targetId={`heatmap-${vista}-table`} />}
         </div>
         {players.length === 0 ? (
-          <p className="text-xs text-muted-foreground py-8 text-center border rounded-lg bg-card">Sin datos de formulario.</p>
+          <p className="text-xs text-muted-foreground py-8 text-center border rounded-lg bg-card">
+            Sin datos de formulario.
+          </p>
         ) : (
           <FatigaHeatmap
             key={vista}
@@ -771,33 +919,35 @@ function ResumenTab({
 
       {vista === "fatiga" ? (
         <>
-        <Panel
-          id="control-fatiga-panel"
-          title="Control de Fatiga por sesión (UA = Fatiga × Tiempo)"
-          action={<CopyPNGButton targetId="control-fatiga-panel" />}
-        >
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={completedMetrics.map((s) => ({
-              label: s.date.slice(5),
-              ua: s.fatigaXTiempo,
-              fatigaMedia: s.fatigaMedia,
-              duration: s.duration,
-              tipo: s.type,
-            }))}>
-              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-              <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-              <Tooltip content={<UATooltip optimo={optimo} moderado={moderado} />} />
-              <ReferenceLine y={optimo} stroke="var(--warning)" strokeDasharray="4 4" />
-              <ReferenceLine y={moderado} stroke="var(--danger)" strokeDasharray="4 4" />
-              <Bar dataKey="ua" radius={[4, 4, 0, 0]} name="UA">
-                {completedMetrics.map((s, i) => (
-                  <Cell key={i} fill={statusColor(uaStatus(s.fatigaXTiempo))} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Panel>
+          <Panel
+            id="control-fatiga-panel"
+            title="Control de Fatiga por sesión (UA = Fatiga × Tiempo)"
+            action={<CopyPNGButton targetId="control-fatiga-panel" />}
+          >
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart
+                data={completedMetrics.map((s) => ({
+                  label: s.date.slice(5),
+                  ua: s.fatigaXTiempo,
+                  fatigaMedia: s.fatigaMedia,
+                  duration: s.duration,
+                  tipo: s.type,
+                }))}
+              >
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                <Tooltip content={<UATooltip optimo={optimo} moderado={moderado} />} />
+                <ReferenceLine y={optimo} stroke="var(--warning)" strokeDasharray="4 4" />
+                <ReferenceLine y={moderado} stroke="var(--danger)" strokeDasharray="4 4" />
+                <Bar dataKey="ua" radius={[4, 4, 0, 0]} name="UA">
+                  {completedMetrics.map((s, i) => (
+                    <Cell key={i} fill={statusColor(uaStatus(s.fatigaXTiempo))} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Panel>
           <AcwrEvolutionPanel
             id="acwr-panel"
             title="Evolución de Fatiga Aguda, Crónica y Ratio A:C (2-5)"
@@ -808,33 +958,35 @@ function ResumenTab({
         </>
       ) : (
         <>
-        <Panel
-          id="control-carga-panel"
-          title="Control de Carga por sesión (UA = RPE × Tiempo)"
-          action={<CopyPNGButton targetId="control-carga-panel" />}
-        >
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={completedMetrics.map((s) => ({
-              label: s.date.slice(5),
-              ua: s.rpeXTiempo,
-              rpeMedia: s.rpeMedia,
-              duration: s.duration,
-              tipo: s.type,
-            }))}>
-              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-              <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-              <Tooltip content={<UATooltipCarga optimo={optimo} moderado={moderado} />} />
-              <ReferenceLine y={optimo} stroke="var(--warning)" strokeDasharray="4 4" />
-              <ReferenceLine y={moderado} stroke="var(--danger)" strokeDasharray="4 4" />
-              <Bar dataKey="ua" radius={[4, 4, 0, 0]} name="UA">
-                {completedMetrics.map((s, i) => (
-                  <Cell key={i} fill={statusColor(uaStatus(s.rpeXTiempo))} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </Panel>
+          <Panel
+            id="control-carga-panel"
+            title="Control de Carga por sesión (UA = RPE × Tiempo)"
+            action={<CopyPNGButton targetId="control-carga-panel" />}
+          >
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart
+                data={completedMetrics.map((s) => ({
+                  label: s.date.slice(5),
+                  ua: s.rpeXTiempo,
+                  rpeMedia: s.rpeMedia,
+                  duration: s.duration,
+                  tipo: s.type,
+                }))}
+              >
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                <Tooltip content={<UATooltipCarga optimo={optimo} moderado={moderado} />} />
+                <ReferenceLine y={optimo} stroke="var(--warning)" strokeDasharray="4 4" />
+                <ReferenceLine y={moderado} stroke="var(--danger)" strokeDasharray="4 4" />
+                <Bar dataKey="ua" radius={[4, 4, 0, 0]} name="UA">
+                  {completedMetrics.map((s, i) => (
+                    <Cell key={i} fill={statusColor(uaStatus(s.rpeXTiempo))} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Panel>
           <AcwrEvolutionPanel
             id="acwr-carga-panel"
             title="Evolución de Carga Aguda, Crónica y Ratio A:C (2-5)"
@@ -864,16 +1016,13 @@ function AcwrEvolutionPanel({
   sessionMetrics: ReturnType<typeof useCallUpDashboard>["sessionMetrics"];
 }) {
   return (
-    <Panel
-      id={id}
-      title={title}
-      action={<CopyPNGButton targetId={id} />}
-    >
+    <Panel id={id} title={title} action={<CopyPNGButton targetId={id} />}>
       <ResponsiveContainer width="100%" height={400}>
         <ComposedChart
           data={series.map((s) => {
             const session = sessionMetrics.find((sm) => sm.date === s.date);
-            const label = formatDateESZeroPadded(s.date) + (session?.dayLabel ? ` ${session.dayLabel}` : "");
+            const label =
+              formatDateESZeroPadded(s.date) + (session?.dayLabel ? ` ${session.dayLabel}` : "");
             return {
               label,
               aguda: Math.round(s.aguda),
@@ -890,13 +1039,14 @@ function AcwrEvolutionPanel({
           <YAxis
             yAxisId="left"
             domain={[0, (max: number) => Math.max(1250, Math.ceil(max / 250) * 250)]}
-            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+          />
           <YAxis
             yAxisId="right"
             orientation="right"
             domain={[0.0, 1.5]}
             tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-            tickFormatter={(v) => v.toFixed(2).replace('.', ',')}
+            tickFormatter={(v) => v.toFixed(2).replace(".", ",")}
           />
           <Tooltip content={<ACWRTooltip />} />
           <Legend
@@ -905,10 +1055,28 @@ function AcwrEvolutionPanel({
             wrapperStyle={{ fontSize: 11, fontWeight: "bold" }}
           />
           <Bar yAxisId="left" dataKey="aguda" fill="#ff0000" name={`${label} AGUDA`} barSize={35}>
-            <LabelList dataKey="aguda" position="inside" fill="#ffffff" fontSize={11} fontWeight="bold" />
+            <LabelList
+              dataKey="aguda"
+              position="inside"
+              fill="#ffffff"
+              fontSize={11}
+              fontWeight="bold"
+            />
           </Bar>
-          <Bar yAxisId="left" dataKey="cronica" fill="#2f5597" name={`${label} CRÓNICA`} barSize={35}>
-            <LabelList dataKey="cronica" position="inside" fill="#ffffff" fontSize={11} fontWeight="bold" />
+          <Bar
+            yAxisId="left"
+            dataKey="cronica"
+            fill="#2f5597"
+            name={`${label} CRÓNICA`}
+            barSize={35}
+          >
+            <LabelList
+              dataKey="cronica"
+              position="inside"
+              fill="#ffffff"
+              fontSize={11}
+              fontWeight="bold"
+            />
           </Bar>
           <Line
             yAxisId="right"
@@ -922,7 +1090,7 @@ function AcwrEvolutionPanel({
             <LabelList
               dataKey="acwr"
               position="top"
-              formatter={(v: number) => v.toFixed(2).replace('.', ',')}
+              formatter={(v: number) => v.toFixed(2).replace(".", ",")}
               fontSize={11}
               fontWeight="bold"
               fill="#ffffff"
@@ -961,29 +1129,37 @@ function AcwrEvolutionPanel({
 
 function getSessionTypeBadge(type: SessionType) {
   const styles: Record<SessionType, string> = {
-    "PARTIDO": "bg-rose-500/10 text-rose-600 dark:text-rose-450 border border-rose-500/20",
+    PARTIDO: "bg-rose-500/10 text-rose-600 dark:text-rose-450 border border-rose-500/20",
     "TEC-TAC": "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20",
-    "FÍSICO": "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20",
-    "LIBRE": "bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20",
-    "GYM+TEC-TAC": "bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20",
-    "FÍSICO+TEC-TAC": "bg-amber-500/10 text-amber-600 dark:text-amber-450 border border-amber-500/20",
-    "FÍSICO+PARTIDO": "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 border border-fuchsia-500/20",
-    "TEC-TAC+TEC-TAC": "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20",
-    "ACTIVACIÓN": "bg-yellow-500/10 text-yellow-600 dark:text-yellow-450 border border-yellow-500/20",
-    "REGENERATIVO": "bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20",
+    FÍSICO: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20",
+    LIBRE: "bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20",
+    "GYM+TEC-TAC":
+      "bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20",
+    "FÍSICO+TEC-TAC":
+      "bg-amber-500/10 text-amber-600 dark:text-amber-450 border border-amber-500/20",
+    "FÍSICO+PARTIDO":
+      "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 border border-fuchsia-500/20",
+    "TEC-TAC+TEC-TAC":
+      "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20",
+    ACTIVACIÓN: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-450 border border-yellow-500/20",
+    REGENERATIVO: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20",
   };
   const cls = styles[type] || "bg-muted text-muted-foreground border";
   return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>
-      {type}
-    </span>
+    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cls}`}>{type}</span>
   );
 }
 
 // ─── Sesiones tab ─────────────────────────────────────────────────────────────
 
-function SesionesTab({ callUpId, sessions, onChanged }: {
-  callUpId: string; sessions: StoredSession[]; onChanged: () => void;
+function SesionesTab({
+  callUpId,
+  sessions,
+  onChanged,
+}: {
+  callUpId: string;
+  sessions: StoredSession[];
+  onChanged: () => void;
 }) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -1007,7 +1183,8 @@ function SesionesTab({ callUpId, sessions, onChanged }: {
     if (!editDate) return;
     setSavingId(s.id);
     try {
-      const dayLabel: DayLabel = editDayLabelSelect === "single" ? "" : (editDayLabelSelect as DayLabel);
+      const dayLabel: DayLabel =
+        editDayLabelSelect === "single" ? "" : (editDayLabelSelect as DayLabel);
       const duration = editDuration ? parseInt(editDuration, 10) : 0;
       await updateSession({ ...s, date: editDate, dayLabel, type: editType, duration });
       setEditingId(null);
@@ -1075,7 +1252,9 @@ function SesionesTab({ callUpId, sessions, onChanged }: {
                         </td>
                         <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
                           <Select value={editDayLabelSelect} onValueChange={setEditDayLabelSelect}>
-                            <SelectTrigger className="h-8 text-xs w-full"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs w-full">
+                              <SelectValue />
+                            </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="single">Dia (único)</SelectItem>
                               <SelectItem value="M">Dia M (Mañana)</SelectItem>
@@ -1085,10 +1264,19 @@ function SesionesTab({ callUpId, sessions, onChanged }: {
                           </Select>
                         </td>
                         <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
-                          <Select value={editType} onValueChange={(v) => setEditType(v as SessionType)}>
-                            <SelectTrigger className="h-8 text-xs w-full"><SelectValue /></SelectTrigger>
+                          <Select
+                            value={editType}
+                            onValueChange={(v) => setEditType(v as SessionType)}
+                          >
+                            <SelectTrigger className="h-8 text-xs w-full">
+                              <SelectValue />
+                            </SelectTrigger>
                             <SelectContent>
-                              {SESSION_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                              {SESSION_TYPES.map((t) => (
+                                <SelectItem key={t} value={t}>
+                                  {t}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </td>
@@ -1134,14 +1322,15 @@ function SesionesTab({ callUpId, sessions, onChanged }: {
                         <td className="px-3 py-2.5 text-muted-foreground">
                           {s.dayLabel ? `Dia ${s.dayLabel}` : "Dia"}
                         </td>
-                        <td className="px-3 py-2.5">
-                          {getSessionTypeBadge(s.type)}
-                        </td>
+                        <td className="px-3 py-2.5">{getSessionTypeBadge(s.type)}</td>
                         <td className="px-3 py-2.5 tabular-nums">
                           {s.duration === 0 ? "—" : s.duration}
                         </td>
                         <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <div
+                            className="flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <button
                               onClick={() => handleDelete(s.id)}
                               disabled={deletingId === s.id}
@@ -1171,7 +1360,10 @@ function SesionesTab({ callUpId, sessions, onChanged }: {
 
 // ─── Control Fatiga tab ────────────────────────────────────────────────────────
 
-function ControlFatigaTab({ sessionMetrics, acwrSeries }: {
+function ControlFatigaTab({
+  sessionMetrics,
+  acwrSeries,
+}: {
   sessionMetrics: ReturnType<typeof useCallUpDashboard>["sessionMetrics"];
   acwrSeries: ReturnType<typeof useCallUpDashboard>["acwrSeries"];
 }) {
@@ -1197,8 +1389,20 @@ function ControlFatigaTab({ sessionMetrics, acwrSeries }: {
         <table id="control-fatiga-table" className="w-full text-sm bg-card">
           <thead className="bg-muted/40 text-xs text-muted-foreground">
             <tr>
-              {["Fecha", "Tipo", "Dur (min)", "Resp.", "Fatiga media", "UA (F×T)", "Aguda", "Crónica", "Ratio A:C"].map((h) => (
-                <th key={h} className="text-left font-medium px-3 py-2">{h}</th>
+              {[
+                "Fecha",
+                "Tipo",
+                "Dur (min)",
+                "Resp.",
+                "Fatiga media",
+                "UA (F×T)",
+                "Aguda",
+                "Crónica",
+                "Ratio A:C",
+              ].map((h) => (
+                <th key={h} className="text-left font-medium px-3 py-2">
+                  {h}
+                </th>
               ))}
             </tr>
           </thead>
@@ -1210,12 +1414,18 @@ function ControlFatigaTab({ sessionMetrics, acwrSeries }: {
                 <td className="px-3 py-2 tabular-nums">{r.duration}</td>
                 <td className="px-3 py-2 tabular-nums text-muted-foreground">{r.responseCount}</td>
                 <td className="px-3 py-2 tabular-nums">{r.fatigaMedia.toFixed(1)}</td>
-                <td className="px-3 py-2 tabular-nums font-medium" style={{ color: statusColor(uaStatus(r.fatigaXTiempo)) }}>
+                <td
+                  className="px-3 py-2 tabular-nums font-medium"
+                  style={{ color: statusColor(uaStatus(r.fatigaXTiempo)) }}
+                >
                   {Math.round(r.fatigaXTiempo)}
                 </td>
                 <td className="px-3 py-2 tabular-nums">{r.aguda}</td>
                 <td className="px-3 py-2 tabular-nums">{r.cronica}</td>
-                <td className="px-3 py-2 tabular-nums font-medium" style={{ color: statusColor(acwrStatus(r.acwr)) }}>
+                <td
+                  className="px-3 py-2 tabular-nums font-medium"
+                  style={{ color: statusColor(acwrStatus(r.acwr)) }}
+                >
                   {r.acwr.toFixed(2)}
                 </td>
               </tr>
@@ -1229,7 +1439,10 @@ function ControlFatigaTab({ sessionMetrics, acwrSeries }: {
 
 // ─── Control Carga tab ─────────────────────────────────────────────────────────
 
-function ControlCargaTab({ sessionMetrics, acwrSeries }: {
+function ControlCargaTab({
+  sessionMetrics,
+  acwrSeries,
+}: {
   sessionMetrics: ReturnType<typeof useCallUpDashboard>["sessionMetrics"];
   acwrSeries: ReturnType<typeof useCallUpDashboard>["acwrSeriesRpe"];
 }) {
@@ -1255,8 +1468,20 @@ function ControlCargaTab({ sessionMetrics, acwrSeries }: {
         <table id="control-carga-table" className="w-full text-sm bg-card">
           <thead className="bg-muted/40 text-xs text-muted-foreground">
             <tr>
-              {["Fecha", "Tipo", "Dur (min)", "Resp.", "RPE media", "UA (RPE×T)", "Aguda", "Crónica", "Ratio A:C"].map((h) => (
-                <th key={h} className="text-left font-medium px-3 py-2">{h}</th>
+              {[
+                "Fecha",
+                "Tipo",
+                "Dur (min)",
+                "Resp.",
+                "RPE media",
+                "UA (RPE×T)",
+                "Aguda",
+                "Crónica",
+                "Ratio A:C",
+              ].map((h) => (
+                <th key={h} className="text-left font-medium px-3 py-2">
+                  {h}
+                </th>
               ))}
             </tr>
           </thead>
@@ -1268,12 +1493,18 @@ function ControlCargaTab({ sessionMetrics, acwrSeries }: {
                 <td className="px-3 py-2 tabular-nums">{r.duration}</td>
                 <td className="px-3 py-2 tabular-nums text-muted-foreground">{r.responseCount}</td>
                 <td className="px-3 py-2 tabular-nums">{r.rpeMedia.toFixed(1)}</td>
-                <td className="px-3 py-2 tabular-nums font-medium" style={{ color: statusColor(uaStatus(r.rpeXTiempo)) }}>
+                <td
+                  className="px-3 py-2 tabular-nums font-medium"
+                  style={{ color: statusColor(uaStatus(r.rpeXTiempo)) }}
+                >
                   {Math.round(r.rpeXTiempo)}
                 </td>
                 <td className="px-3 py-2 tabular-nums">{r.aguda}</td>
                 <td className="px-3 py-2 tabular-nums">{r.cronica}</td>
-                <td className="px-3 py-2 tabular-nums font-medium" style={{ color: statusColor(acwrStatus(r.acwr)) }}>
+                <td
+                  className="px-3 py-2 tabular-nums font-medium"
+                  style={{ color: statusColor(acwrStatus(r.acwr)) }}
+                >
                   {r.acwr.toFixed(2)}
                 </td>
               </tr>
@@ -1349,11 +1580,14 @@ function PlayerCard({
 }) {
   const acwrSt = acwrStatus(p.ratioACWR);
   const uaSt = uaStatus(p.uaMax);
-  const worst = acwrSt === "riesgo" || uaSt === "riesgo" ? "riesgo" : acwrSt === "moderado" || uaSt === "moderado" ? "moderado" : "optimo";
+  const worst =
+    acwrSt === "riesgo" || uaSt === "riesgo"
+      ? "riesgo"
+      : acwrSt === "moderado" || uaSt === "moderado"
+        ? "moderado"
+        : "optimo";
 
-  const dbPlayer = allPlayers.find(
-    (x) => normalizeName(x.name) === normalizeName(p.jugador)
-  );
+  const dbPlayer = allPlayers.find((x) => normalizeName(x.name) === normalizeName(p.jugador));
 
   const { id: callUpId } = useParams<{ id: string }>();
   const mins = playerMinutesSummary(p.jugador, minutes);
@@ -1365,21 +1599,26 @@ function PlayerCard({
       <div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2.5 min-w-0">
-          <CardAvatar name={p.jugador} />
-          <div className="min-w-0">
-            <Link
-              to={detailUrl}
-              className="text-sm font-medium hover:underline text-foreground flex items-center gap-1.5"
-            >
-              <span>{p.jugador}</span>
-              {dbPlayer && (
-                <span className="text-[10px] text-muted-foreground font-normal">({dbPlayer.position})</span>
-              )}
-            </Link>
-            <div className="text-[11px] text-muted-foreground">{p.responseCount} respuestas</div>
+            <CardAvatar name={p.jugador} />
+            <div className="min-w-0">
+              <Link
+                to={detailUrl}
+                className="text-sm font-medium hover:underline text-foreground flex items-center gap-1.5"
+              >
+                <span>{p.jugador}</span>
+                {dbPlayer && (
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    ({dbPlayer.position})
+                  </span>
+                )}
+              </Link>
+              <div className="text-[11px] text-muted-foreground">{p.responseCount} respuestas</div>
+            </div>
           </div>
-          </div>
-          <span className="size-2.5 rounded-full shrink-0" style={{ background: statusColor(worst) }} />
+          <span
+            className="size-2.5 rounded-full shrink-0"
+            style={{ background: statusColor(worst) }}
+          />
         </div>
         <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-xs mb-4">
           <MiniStat label="Fatiga media" value={p.fatigaMedia.toFixed(1)} />
@@ -1388,7 +1627,10 @@ function PlayerCard({
           <MiniStat label="UA máx" value={p.uaMax.toLocaleString()} color={statusColor(uaSt)} />
           <MiniStat label="Monotonía" value={p.indiceDeMonotonia.toFixed(2)} />
           <MiniStat label="ACWR" value={p.ratioACWR.toFixed(2)} color={statusColor(acwrSt)} />
-          <MiniStat label="Minutos jugados" value={mins.total > 0 ? formatMinutes(mins.total) : "—"} />
+          <MiniStat
+            label="Minutos jugados"
+            value={mins.total > 0 ? formatMinutes(mins.total) : "—"}
+          />
           <MiniStat label="Partidos" value={String(mins.matchesPlayed)} />
         </div>
       </div>
@@ -1417,7 +1659,12 @@ function PlayerCard({
 function CardAvatar({ name }: { name: string }) {
   const src = getPlayerPhoto(name);
   const [failed, setFailed] = useState(false);
-  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("");
   if (!src || failed) {
     return (
       <div
@@ -1428,7 +1675,14 @@ function CardAvatar({ name }: { name: string }) {
       </div>
     );
   }
-  return <img src={src} alt={name} onError={() => setFailed(true)} className="size-9 shrink-0 rounded-full object-cover border" />;
+  return (
+    <img
+      src={src}
+      alt={name}
+      onError={() => setFailed(true)}
+      className="size-9 shrink-0 rounded-full object-cover border"
+    />
+  );
 }
 
 // ─── Heatmap ──────────────────────────────────────────────────────────────────
@@ -1454,7 +1708,12 @@ function FatigaHeatmap({
   sessions: StoredSession[];
   onSessionUpdated?: () => void;
   onResponseUpdated?: () => void;
-  updateResponseLocally: (jugador: string, fecha: string, fatigue: number | null, rpe: number | null) => void;
+  updateResponseLocally: (
+    jugador: string,
+    fecha: string,
+    fatigue: number | null,
+    rpe: number | null,
+  ) => void;
   updateSessionLocally: (sessionId: string, duration: number) => void;
 }) {
   const [selectedCell, setSelectedCell] = useState<{
@@ -1479,7 +1738,11 @@ function FatigaHeatmap({
     const days = ["DOMINGO", "LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES", "SÁBADO"];
     const parts = dateStr.split("-");
     if (parts.length === 3) {
-      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      const d = new Date(
+        parseInt(parts[0], 10),
+        parseInt(parts[1], 10) - 1,
+        parseInt(parts[2], 10),
+      );
       return days[d.getDay()];
     }
     const d = new Date(dateStr);
@@ -1508,8 +1771,10 @@ function FatigaHeatmap({
   const L = isCarga ? "Carga" : "Fatiga";
   const cellValue = (s: (typeof sessionMetrics)[number], jugador: string) =>
     isCarga ? s.playerRPE[jugador] : s.playerFatigue[jugador];
-  const sessionUA = (s: (typeof sessionMetrics)[number]) => (isCarga ? s.rpeXTiempo : s.fatigaXTiempo);
-  const sessionMean = (s: (typeof sessionMetrics)[number]) => (isCarga ? s.rpeMedia : s.fatigaMedia);
+  const sessionUA = (s: (typeof sessionMetrics)[number]) =>
+    isCarga ? s.rpeXTiempo : s.fatigaXTiempo;
+  const sessionMean = (s: (typeof sessionMetrics)[number]) =>
+    isCarga ? s.rpeMedia : s.fatigaMedia;
 
   // Calculations for summary rows
   const uaValues = sessionMetrics.map(sessionUA);
@@ -1539,16 +1804,16 @@ function FatigaHeatmap({
   // Colors for session type in row 3
   function getSessionTypeHeaderBg(type: SessionType): string {
     const map: Record<SessionType, string> = {
-      "PARTIDO": "bg-[#00ffff] text-black font-semibold",
+      PARTIDO: "bg-[#00ffff] text-black font-semibold",
       "TEC-TAC": "bg-[#f2f2f2] text-black",
-      "FÍSICO": "bg-[#c6efce] text-black",
-      "LIBRE": "bg-[#ffffff] text-black border",
+      FÍSICO: "bg-[#c6efce] text-black",
+      LIBRE: "bg-[#ffffff] text-black border",
       "GYM+TEC-TAC": "bg-[#e2efda] text-black",
       "FÍSICO+TEC-TAC": "bg-[#fff2cc] text-black",
       "FÍSICO+PARTIDO": "bg-[#fce4d6] text-black",
       "TEC-TAC+TEC-TAC": "bg-[#d9e1f2] text-black",
-      "ACTIVACIÓN": "bg-[#fff2cc] text-black",
-      "REGENERATIVO": "bg-[#e2efda] text-black",
+      ACTIVACIÓN: "bg-[#fff2cc] text-black",
+      REGENERATIVO: "bg-[#e2efda] text-black",
     };
     return map[type] || "bg-[#f2f2f2] text-black";
   }
@@ -1563,7 +1828,12 @@ function FatigaHeatmap({
         fatigue: selectedCell.fatigue,
         rpe: selectedCell.rpe,
       });
-      updateResponseLocally(selectedCell.jugador, selectedCell.date, selectedCell.fatigue, selectedCell.rpe);
+      updateResponseLocally(
+        selectedCell.jugador,
+        selectedCell.date,
+        selectedCell.fatigue,
+        selectedCell.rpe,
+      );
       setSelectedCell(null);
       toast.success(`Datos de ${selectedCell.jugador} guardados correctamente`);
       if (onResponseUpdated) onResponseUpdated();
@@ -1595,7 +1865,7 @@ function FatigaHeatmap({
     }
   }
 
-  async function handleSaveDuration(s: typeof sessionMetrics[0]) {
+  async function handleSaveDuration(s: (typeof sessionMetrics)[0]) {
     const originalSession = sessions.find((sess) => sess.id === s.sessionId);
     if (!originalSession) return;
     const newDuration = parseInt(editDurationValue, 10);
@@ -1625,27 +1895,42 @@ function FatigaHeatmap({
         <thead>
           {/* Row 1: FECHA */}
           <tr className="border-b bg-muted/30">
-            <th className="px-3 py-1.5 text-left font-bold border-r w-[200px] bg-card text-[10px] uppercase tracking-wider sticky left-0 z-20 shadow-[1px_0_0_var(--border)]">Fecha</th>
+            <th className="px-3 py-1.5 text-left font-bold border-r w-[200px] bg-card text-[10px] uppercase tracking-wider sticky left-0 z-20 shadow-[1px_0_0_var(--border)]">
+              Fecha
+            </th>
             {sessionMetrics.map((s) => (
-              <th key={s.sessionId} className="px-3 py-1.5 border-r font-bold tabular-nums whitespace-nowrap text-[10px]">
+              <th
+                key={s.sessionId}
+                className="px-3 py-1.5 border-r font-bold tabular-nums whitespace-nowrap text-[10px]"
+              >
                 {formatDateES(s.date)} {s.dayLabel}
               </th>
             ))}
           </tr>
           {/* Row 2: DIA */}
           <tr className="border-b bg-muted/30">
-            <th className="px-3 py-1.5 text-left font-bold border-r w-[200px] bg-card text-[10px] uppercase tracking-wider sticky left-0 z-20 shadow-[1px_0_0_var(--border)]">Dia</th>
+            <th className="px-3 py-1.5 text-left font-bold border-r w-[200px] bg-card text-[10px] uppercase tracking-wider sticky left-0 z-20 shadow-[1px_0_0_var(--border)]">
+              Dia
+            </th>
             {sessionMetrics.map((s) => (
-              <th key={s.sessionId} className="px-3 py-1.5 border-r font-bold whitespace-nowrap text-[10px]">
+              <th
+                key={s.sessionId}
+                className="px-3 py-1.5 border-r font-bold whitespace-nowrap text-[10px]"
+              >
                 {getSpanishDayName(s.date)} {s.dayLabel}
               </th>
             ))}
           </tr>
           {/* Row 3: JUGADOR / Tipo Sesion */}
           <tr className="border-b bg-red-650 text-white font-semibold">
-            <th className="px-3 py-1.5 text-left font-bold border-r w-[200px] bg-red-600 border-red-700 text-[10px] uppercase tracking-wider sticky left-0 z-20">Jugador</th>
+            <th className="px-3 py-1.5 text-left font-bold border-r w-[200px] bg-red-600 border-red-700 text-[10px] uppercase tracking-wider sticky left-0 z-20">
+              Jugador
+            </th>
             {sessionMetrics.map((s) => (
-              <th key={s.sessionId} className={`px-3 py-1.5 border-r border-red-700 whitespace-nowrap text-[10px] ${getSessionTypeHeaderBg(s.type as SessionType)}`}>
+              <th
+                key={s.sessionId}
+                className={`px-3 py-1.5 border-r border-red-700 whitespace-nowrap text-[10px] ${getSessionTypeHeaderBg(s.type as SessionType)}`}
+              >
                 {s.type}
               </th>
             ))}
@@ -1655,7 +1940,9 @@ function FatigaHeatmap({
           {/* Player Rows */}
           {players.map((jugador) => (
             <tr key={jugador} className="border-b hover:bg-muted/10">
-              <td className="px-3 py-1 text-left border-r font-bold uppercase bg-card w-[200px] text-[10px] whitespace-nowrap sticky left-0 z-10 shadow-[1px_0_0_var(--border)]">{jugador}</td>
+              <td className="px-3 py-1 text-left border-r font-bold uppercase bg-card w-[200px] text-[10px] whitespace-nowrap sticky left-0 z-10 shadow-[1px_0_0_var(--border)]">
+                {jugador}
+              </td>
               {sessionMetrics.map((s) => {
                 const val = cellValue(s, jugador);
                 return (
@@ -1685,7 +1972,9 @@ function FatigaHeatmap({
 
           {/* TIEMPO SESIÓN (min) */}
           <tr className="border-b font-bold bg-muted/30 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">Tiempo Sesión (min)</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">
+              Tiempo Sesión (min)
+            </td>
             {sessionMetrics.map((s) => {
               const isEditing = editingSessionDurationId === s.sessionId;
               return (
@@ -1725,7 +2014,9 @@ function FatigaHeatmap({
 
           {/* FATIGA MEDIA SESIÓN */}
           <tr className="border-b bg-muted/10 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">{L} Media Sesión</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">
+              {L} Media Sesión
+            </td>
             {sessionMetrics.map((s) => (
               <td key={s.sessionId} className="px-3 py-1.5 border-r tabular-nums font-bold">
                 {Math.round(sessionMean(s))}
@@ -1735,7 +2026,9 @@ function FatigaHeatmap({
 
           {/* FATIGA SESIÓN (FATIGA x TIEMPO) */}
           <tr className="border-b bg-muted/10 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">{isCarga ? "Carga Sesión (RPE x Tiempo)" : "Fatiga Sesión (Fatiga x Tiempo)"}</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">
+              {isCarga ? "Carga Sesión (RPE x Tiempo)" : "Fatiga Sesión (Fatiga x Tiempo)"}
+            </td>
             {sessionMetrics.map((s) => (
               <td key={s.sessionId} className="px-3 py-1.5 border-r tabular-nums font-bold">
                 {Math.round(sessionUA(s))}
@@ -1745,7 +2038,9 @@ function FatigaHeatmap({
 
           {/* FATIGA MEDIA SEMANAL */}
           <tr className="border-b bg-muted/5 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">{L} Media Semanal</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">
+              {L} Media Semanal
+            </td>
             {sessionMetrics.map((s, i) => {
               const isMid = i === Math.floor(sessionMetrics.length / 2);
               return (
@@ -1758,7 +2053,9 @@ function FatigaHeatmap({
 
           {/* DESVIACIÓN ESTÁNDAR */}
           <tr className="border-b bg-muted/5 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">Desviación Estándar</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">
+              Desviación Estándar
+            </td>
             {sessionMetrics.map((s, i) => {
               const isMid = i === Math.floor(sessionMetrics.length / 2);
               return (
@@ -1771,7 +2068,9 @@ function FatigaHeatmap({
 
           {/* ÍNDICE DE MONOTONÍA */}
           <tr className="border-b bg-muted/5 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">Índice de Monotonía</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">
+              Índice de Monotonía
+            </td>
             {sessionMetrics.map((s, i) => {
               const isMid = i === Math.floor(sessionMetrics.length / 2);
               return (
@@ -1784,7 +2083,9 @@ function FatigaHeatmap({
 
           {/* ÍNDICE DE FATIGA */}
           <tr className="border-b bg-muted/5 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">Índice de {L}</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">
+              Índice de {L}
+            </td>
             {sessionMetrics.map((s, i) => {
               const isMid = i === Math.floor(sessionMetrics.length / 2);
               return (
@@ -1797,7 +2098,9 @@ function FatigaHeatmap({
 
           {/* FATIGA AGUDA */}
           <tr className="border-b bg-muted/10 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">{L} Aguda</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">
+              {L} Aguda
+            </td>
             {sessionMetrics.map((s, i) => (
               <td key={s.sessionId} className="px-3 py-1.5 border-r tabular-nums">
                 {acwrSeries[i]?.aguda ?? 0}
@@ -1807,7 +2110,9 @@ function FatigaHeatmap({
 
           {/* FATIGA CRÓNICA */}
           <tr className="border-b bg-muted/10 text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">{L} Crónica</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-semibold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">
+              {L} Crónica
+            </td>
             {sessionMetrics.map((s, i) => (
               <td key={s.sessionId} className="px-3 py-1.5 border-r tabular-nums">
                 {acwrSeries[i]?.cronica ?? 0}
@@ -1817,11 +2122,16 @@ function FatigaHeatmap({
 
           {/* RATIO A:C (2-5) */}
           <tr className="border-b bg-muted/15 font-bold text-[10px]">
-            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-bold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">Ratio A:C (2-5)</td>
+            <td className="px-3 py-1.5 text-left border-r uppercase w-[200px] tracking-wider font-bold sticky left-0 z-10 bg-card shadow-[1px_0_0_var(--border)]">
+              Ratio A:C (2-5)
+            </td>
             {sessionMetrics.map((s, i) => {
               const ratio = acwrSeries[i]?.acwr ?? 0;
               return (
-                <td key={s.sessionId} className={`px-3 py-1.5 border-r tabular-nums ${getAcwrCellBg(ratio)}`}>
+                <td
+                  key={s.sessionId}
+                  className={`px-3 py-1.5 border-r tabular-nums ${getAcwrCellBg(ratio)}`}
+                >
                   {ratio.toFixed(2)}
                 </td>
               );
@@ -1852,7 +2162,7 @@ function FatigaHeatmap({
                     if (selectedCell) {
                       setSelectedCell({
                         ...selectedCell,
-                        fatigue: parseInt(e.target.value, 10) || 0
+                        fatigue: parseInt(e.target.value, 10) || 0,
                       });
                     }
                   }}
@@ -1860,20 +2170,24 @@ function FatigaHeatmap({
                 >
                   <option value="">Seleccionar...</option>
                   {[...Array(10)].map((_, i) => (
-                    <option key={i + 1} value={i + 1}>{i + 1}</option>
+                    <option key={i + 1} value={i + 1}>
+                      {i + 1}
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div className="grid gap-2">
-                <label className="text-xs font-semibold text-muted-foreground">Intensidad RPE (1-10)</label>
+                <label className="text-xs font-semibold text-muted-foreground">
+                  Intensidad RPE (1-10)
+                </label>
                 <select
                   value={selectedCell?.rpe ?? ""}
                   onChange={(e) => {
                     if (selectedCell) {
                       setSelectedCell({
                         ...selectedCell,
-                        rpe: parseInt(e.target.value, 10) || 0
+                        rpe: parseInt(e.target.value, 10) || 0,
                       });
                     }
                   }}
@@ -1881,7 +2195,9 @@ function FatigaHeatmap({
                 >
                   <option value="">Seleccionar...</option>
                   {[...Array(10)].map((_, i) => (
-                    <option key={i + 1} value={i + 1}>{i + 1}</option>
+                    <option key={i + 1} value={i + 1}>
+                      {i + 1}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -1945,7 +2261,10 @@ function NuevaSesionDialog({ callUpId, onCreated }: { callUpId: string; onCreate
       const parsedDuration = duration ? parseInt(duration, 10) : 0;
       await saveSession({ callUpId, date, dayLabel, type, duration: parsedDuration });
       setOpen(false);
-      setDate(""); setDayLabelSelect("single"); setType("TEC-TAC"); setDuration("");
+      setDate("");
+      setDayLabelSelect("single");
+      setType("TEC-TAC");
+      setDuration("");
       onCreated();
     } catch (e) {
       alert(`Error al guardar sesión: ${e}`);
@@ -1969,7 +2288,12 @@ function NuevaSesionDialog({ callUpId, onCreated }: { callUpId: string; onCreate
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label htmlFor="ns-date">Fecha *</Label>
-              <Input id="ns-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              <Input
+                id="ns-date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ns-label">Momento del día</Label>
@@ -1989,20 +2313,35 @@ function NuevaSesionDialog({ callUpId, onCreated }: { callUpId: string; onCreate
           <div className="grid gap-2">
             <Label htmlFor="ns-type">Tipo de sesión *</Label>
             <Select value={type} onValueChange={(v) => setType(v as SessionType)}>
-              <SelectTrigger id="ns-type"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="ns-type">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {SESSION_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                {SESSION_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="ns-duration">Duración (minutos)</Label>
-            <Input id="ns-duration" type="number" min={1} max={240} placeholder="Ej. 75"
-              value={duration} onChange={(e) => setDuration(e.target.value)} />
+            <Input
+              id="ns-duration"
+              type="number"
+              min={1}
+              max={240}
+              placeholder="Ej. 75"
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+            />
           </div>
         </div>
         <DialogFooter>
-          <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+          <DialogClose asChild>
+            <Button variant="outline">Cancelar</Button>
+          </DialogClose>
           <Button onClick={handleCreate} disabled={!date || saving}>
             {saving ? "Guardando…" : "Guardar sesión"}
           </Button>
@@ -2044,10 +2383,9 @@ function PlayerFilter({
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`text-xs flex items-center gap-1.5 px-3 py-2 rounded-md border transition-colors ${selected.length > 0
-          ? "bg-primary/10 border-primary/40 text-primary"
-          : "hover:bg-accent"
-          }`}
+        className={`text-xs flex items-center gap-1.5 px-3 py-2 rounded-md border transition-colors ${
+          selected.length > 0 ? "bg-primary/10 border-primary/40 text-primary" : "hover:bg-accent"
+        }`}
       >
         <Users className="size-3.5" />
         {label}
@@ -2061,13 +2399,22 @@ function PlayerFilter({
           <div className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg border bg-popover shadow-lg py-1 text-sm text-popover-foreground">
             {/* Equipo = deselect all */}
             <button
-              onClick={() => { onChange([]); setOpen(false); }}
-              className={`w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-accent ${selected.length === 0 ? "font-semibold text-primary" : ""
-                }`}
+              onClick={() => {
+                onChange([]);
+                setOpen(false);
+              }}
+              className={`w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-accent ${
+                selected.length === 0 ? "font-semibold text-primary" : ""
+              }`}
             >
-              <span className={`size-3.5 rounded border flex items-center justify-center ${selected.length === 0 ? "bg-primary border-primary" : "border-muted-foreground"
-                }`}>
-                {selected.length === 0 && <span className="text-primary-foreground text-[9px]">✓</span>}
+              <span
+                className={`size-3.5 rounded border flex items-center justify-center ${
+                  selected.length === 0 ? "bg-primary border-primary" : "border-muted-foreground"
+                }`}
+              >
+                {selected.length === 0 && (
+                  <span className="text-primary-foreground text-[9px]">✓</span>
+                )}
               </span>
               Equipo (todos)
             </button>
@@ -2082,8 +2429,11 @@ function PlayerFilter({
                   onClick={() => toggle(p)}
                   className="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-accent"
                 >
-                  <span className={`size-3.5 rounded border flex items-center justify-center shrink-0 ${checked ? "bg-primary border-primary" : "border-muted-foreground"
-                    }`}>
+                  <span
+                    className={`size-3.5 rounded border flex items-center justify-center shrink-0 ${
+                      checked ? "bg-primary border-primary" : "border-muted-foreground"
+                    }`}
+                  >
                     {checked && <span className="text-primary-foreground text-[9px]">✓</span>}
                   </span>
                   <span className="truncate max-w-[140px]">{p}</span>
@@ -2097,11 +2447,19 @@ function PlayerFilter({
   );
 }
 
-
 // ─── Shared components ────────────────────────────────────────────────────────
 
-
-function Panel({ title, children, id, action }: { title: string; children: React.ReactNode; id?: string; action?: React.ReactNode }) {
+function Panel({
+  title,
+  children,
+  id,
+  action,
+}: {
+  title: string;
+  children: React.ReactNode;
+  id?: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div id={id} className="rounded-lg border bg-card p-4 relative">
       <div className="flex items-center justify-between mb-3 gap-2">
@@ -2156,7 +2514,8 @@ function CopyPNGButton({ targetId }: { targetId: string }) {
       "image/png": blobPromise,
     });
 
-    const promise = navigator.clipboard.write([clipboardItem])
+    const promise = navigator.clipboard
+      .write([clipboardItem])
       .then(() => {
         setState("success");
         setTimeout(() => setState("idle"), 2000);
@@ -2194,13 +2553,24 @@ function CopyPNGButton({ targetId }: { targetId: string }) {
   );
 }
 
-function MetricCard({ label, value, hint, tone }: {
-  label: string; value: string; hint?: string; tone?: "optimo" | "moderado" | "riesgo";
+function MetricCard({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "optimo" | "moderado" | "riesgo";
 }) {
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-2xl font-bold tabular-nums mt-1" style={tone ? { color: statusColor(tone) } : undefined}>
+      <div
+        className="text-2xl font-bold tabular-nums mt-1"
+        style={tone ? { color: statusColor(tone) } : undefined}
+      >
         {value}
       </div>
       {hint && <div className="text-[11px] text-muted-foreground mt-1">{hint}</div>}
@@ -2212,14 +2582,22 @@ function MiniStat({ label, value, color }: { label: string; value: string; color
   return (
     <div>
       <div className="text-muted-foreground">{label}</div>
-      <div className="font-semibold tabular-nums" style={color ? { color } : undefined}>{value}</div>
+      <div className="font-semibold tabular-nums" style={color ? { color } : undefined}>
+        {value}
+      </div>
     </div>
   );
 }
 
 // ─── Editar Convocatoria Dialog ──────────────────────────────────────────────────
 
-function EditarConvocatoriaDialog({ callUp, onUpdated }: { callUp: StoredCallUp; onUpdated: () => void }) {
+function EditarConvocatoriaDialog({
+  callUp,
+  onUpdated,
+}: {
+  callUp: StoredCallUp;
+  onUpdated: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(callUp.name);
   const [startDate, setStartDate] = useState(callUp.startDate);
@@ -2274,22 +2652,38 @@ function EditarConvocatoriaDialog({ callUp, onUpdated }: { callUp: StoredCallUp;
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="ec-start">Fecha inicio *</Label>
-              <Input id="ec-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <Input
+                id="ec-start"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ec-end">Fecha fin *</Label>
-              <Input id="ec-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <Input
+                id="ec-end"
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="ec-location">Sede</Label>
-              <Input id="ec-location" value={location} onChange={(e) => setLocation(e.target.value)} />
+              <Input
+                id="ec-location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="ec-status">Estado</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as StoredCallUp["status"])}>
-                <SelectTrigger id="ec-status"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="ec-status">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="En curso">En curso</SelectItem>
                   <SelectItem value="Finalizada">Finalizada</SelectItem>
@@ -2299,11 +2693,18 @@ function EditarConvocatoriaDialog({ callUp, onUpdated }: { callUp: StoredCallUp;
           </div>
           <div className="grid gap-2">
             <Label htmlFor="ec-notes">Observaciones</Label>
-            <Textarea id="ec-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <Textarea
+              id="ec-notes"
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
           </div>
         </div>
         <DialogFooter>
-          <DialogClose asChild><Button variant="outline">Cancelar</Button></DialogClose>
+          <DialogClose asChild>
+            <Button variant="outline">Cancelar</Button>
+          </DialogClose>
           <Button type="button" onClick={handleSave} disabled={!valid || saving}>
             {saving ? "Guardando…" : "Guardar cambios"}
           </Button>
