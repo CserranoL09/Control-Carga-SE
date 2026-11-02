@@ -11,7 +11,7 @@ import {
 } from "@/lib/store";
 import { formatMinutes, parseMinutesInput } from "@/lib/minutes";
 import { getPlayerPhoto } from "@/lib/player-photos";
-import { PlayerMultiSelect } from "@/components/dashboard/PlayerMultiSelect";
+import { NONE, PlayerMultiSelect } from "@/components/dashboard/PlayerMultiSelect";
 import {
   Bar,
   BarChart,
@@ -119,6 +119,44 @@ export function MinutosTab({
     return v === null || Number.isNaN(v) ? 0 : v;
   };
 
+  // ── Filtro de jugadores de la tabla (solo oculta filas; no cambia lo guardado) ──
+  const filterKey = `minutos-tabla-filtro:${callUpId}`;
+  const [tableFilter, setTableFilterState] = useState<{ list: string[]; soloConMinutos: boolean }>(
+    () => {
+      try {
+        const raw = localStorage.getItem(filterKey);
+        if (raw) {
+          const f = JSON.parse(raw);
+          if (f && Array.isArray(f.list))
+            return { list: f.list, soloConMinutos: !!f.soloConMinutos };
+        }
+      } catch {
+        /* sin almacenamiento */
+      }
+      return { list: selectedPlayers, soloConMinutos: false };
+    },
+  );
+  const setTableFilter = (f: { list: string[]; soloConMinutos: boolean }) => {
+    setTableFilterState(f);
+    try {
+      localStorage.setItem(filterKey, JSON.stringify(f));
+    } catch {
+      /* sin almacenamiento */
+    }
+  };
+  // "Solo con minutos" usa lo guardado, para que la fila no desaparezca mientras se escribe
+  const hasSavedMinutes = (j: string) =>
+    matches.some((s) => {
+      const v = parseMinutesInput(saved[cellKey(s.id, j)] ?? "");
+      return v !== null && !Number.isNaN(v) && v > 0;
+    });
+  const tableRows = roster.filter(
+    (j) =>
+      (tableFilter.list.length === 0 || tableFilter.list.some((x) => samePlayer(x, j))) &&
+      (!tableFilter.soloConMinutos || hasSavedMinutes(j)),
+  );
+  const filterActive = tableFilter.list.length > 0 || tableFilter.soloConMinutos;
+
   // ── Ajuste automático de la tabla a la pantalla ──
   const wrapRef = useRef<HTMLDivElement>(null);
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
@@ -138,7 +176,7 @@ export function MinutosTab({
       const foot = tfootRef.current?.getBoundingClientRect().height ?? 0;
       const hScrollbar = wrap.offsetHeight - wrap.clientHeight; // barra horizontal, si la hay
       const free = window.innerHeight - top - foot - hScrollbar - 12;
-      const n = Math.max(1, roster.length);
+      const n = Math.max(1, tableRows.length);
       setRowH(clamp(Math.floor(free / n), ROW_MIN, ROW_MAX));
     };
     measure();
@@ -149,7 +187,7 @@ export function MinutosTab({
       ro.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [roster.length, matches.length]);
+  }, [roster.length, tableRows.length, matches.length]);
 
   const cols = columnWidths(wrapW || 1000, matches.length);
   const tableW = cols.jugador + cols.match * matches.length + COL_TOTAL * 2;
@@ -174,6 +212,12 @@ export function MinutosTab({
       toast.info(`${name} ya está en la lista`);
     } else {
       setExtraPlayers((p) => [...p, name]);
+      // Que el nuevo jugador se vea aunque haya un filtro activo
+      if (tableFilter.list.length > 0)
+        setTableFilter({
+          ...tableFilter,
+          list: [...tableFilter.list.filter((x) => x !== NONE), name],
+        });
     }
     setNewPlayer("");
   }
@@ -254,7 +298,36 @@ export function MinutosTab({
             <h3 className="text-sm font-medium">Minutos de juego</h3>
             <span className="text-[11px] text-muted-foreground">Formato: 25 · 25,5 · 25:30</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <PlayerMultiSelect
+              players={roster}
+              value={tableFilter.list}
+              onChange={(list) => setTableFilter({ ...tableFilter, list })}
+              compact
+            />
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={tableFilter.soloConMinutos}
+                onChange={(e) =>
+                  setTableFilter({ ...tableFilter, soloConMinutos: e.target.checked })
+                }
+              />
+              Solo con minutos
+            </label>
+            {filterActive && (
+              <span className="text-[11px] text-muted-foreground" data-testid="minutos-mostrando">
+                Mostrando {tableRows.length} de {roster.length}
+                <button
+                  type="button"
+                  onClick={() => setTableFilter({ list: [], soloConMinutos: false })}
+                  className="ml-1.5 text-primary hover:underline"
+                >
+                  Quitar filtro
+                </button>
+              </span>
+            )}
+            <span className="w-px h-5 bg-border mx-1" aria-hidden />
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -344,7 +417,17 @@ export function MinutosTab({
                 </tr>
               </thead>
               <tbody ref={tbodyRef}>
-                {roster.map((j) => {
+                {tableRows.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={matches.length + 3}
+                      className="py-6 text-center text-muted-foreground"
+                    >
+                      Ningún jugador coincide con el filtro
+                    </td>
+                  </tr>
+                )}
+                {tableRows.map((j) => {
                   const values = matches.map((s) => valueOf(s.id, j));
                   const played = values.filter((v) => v > 0);
                   const total = played.reduce((a, b) => a + b, 0);
@@ -401,9 +484,13 @@ export function MinutosTab({
               </tbody>
               <tfoot ref={tfootRef} className="text-[13px] text-muted-foreground border-t">
                 <tr>
-                  <td className={`px-2 py-1.5 z-10 ${stickyLeft}`}>Total equipo</td>
+                  <td className={`px-2 py-1.5 z-10 ${stickyLeft}`}>
+                    {filterActive
+                      ? `Total filtrado (${tableRows.length} ${tableRows.length === 1 ? "jugador" : "jugadores"})`
+                      : "Total equipo"}
+                  </td>
                   {matches.map((s) => {
-                    const sum = roster.reduce((a, j) => a + valueOf(s.id, j), 0);
+                    const sum = tableRows.reduce((a, j) => a + valueOf(s.id, j), 0);
                     return (
                       <td key={s.id} className="px-2 py-1.5 text-center tabular-nums">
                         {sum > 0 ? formatMinutes(sum) : "—"}
