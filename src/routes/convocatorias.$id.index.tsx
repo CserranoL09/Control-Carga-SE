@@ -363,6 +363,7 @@ export default function ConvocatoriaPage() {
                 minutes={minutes}
                 minutesSupported={minutesSupported}
                 onSaved={refreshAll}
+                copyButton={(targetId) => <CopyPNGButton targetId={targetId} />}
               />
             )}
             {tab === "recuperacion" && (
