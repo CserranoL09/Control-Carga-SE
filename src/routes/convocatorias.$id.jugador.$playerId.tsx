@@ -2,6 +2,7 @@ import { exportElementToPdf } from "@/lib/pdf-export";
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
+import { getPlayerPhoto } from "@/lib/player-photos";
 import { MetricCard } from "@/components/MetricCard";
 import { players as allPlayers } from "@/lib/mock-data";
 import { getLoadThresholds } from "@/lib/store";
@@ -241,9 +242,17 @@ export default function Page() {
         </Link>
         <div className="flex items-center justify-between mt-2 flex-wrap gap-4">
           <div className="flex items-center gap-4">
-            <div className="size-14 rounded-full bg-accent grid place-items-center text-xl font-bold">
-              {mockPlayer.number}
-            </div>
+               {getPlayerPhoto(mockPlayer.name) ? (
+                 <img
+                   src={getPlayerPhoto(mockPlayer.name)}
+                   alt={mockPlayer.name}
+                   className="size-14 rounded-full object-cover border-2 border-border"
+                 />
+               ) : (
+                 <div className="size-14 rounded-full bg-accent grid place-items-center text-xl font-bold">
+                   {mockPlayer.number}
+                 </div>
+               )}
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">{mockPlayer.name}</h1>
               <p className="text-sm text-muted-foreground">
