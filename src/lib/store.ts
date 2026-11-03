@@ -97,8 +97,19 @@ export interface StoredMinutes {
   sessionId: string;
   date: string;
   jugador: string;
+  /** Total del partido */
   minutes: number;
+  /** Minutos de la 1ª parte (null = sin desglose) */
+  minutes1?: number | null;
+  /** Minutos de la 2ª parte (null = sin desglose) */
+  minutes2?: number | null;
 }
+
+const toPart = (v: unknown): number | null => {
+  if (v === "" || v === null || v === undefined) return null;
+  const n = Number(String(v).replace(",", "."));
+  return isFinite(n) && n >= 0 && n <= 300 ? n : null;
+};
 
 /** Sesiones en las que se registran minutos de juego */
 export function isMatchSession(s: StoredSession): boolean {
@@ -186,6 +197,8 @@ async function apiGet(): Promise<AllData> {
     date: parseToIsoDate(r.fecha) || r.fecha,
     jugador: (r.jugador ?? "").trim(),
     minutes: Number(String(r.minutos).replace(",", ".")),
+    minutes1: toPart(r.minutos1),
+    minutes2: toPart(r.minutos2),
   })).filter((m: StoredMinutes) =>
     !!m.id && !!m.jugador && isFinite(m.minutes) && m.minutes >= 0 && m.minutes <= 300,
   );
@@ -272,7 +285,15 @@ export async function deleteNote(id: string): Promise<void> {
  * `minutes: null` borra la fila de ese jugador en esa sesión.
  */
 export async function saveMinutesBatch(
-  rows: { callUpId: string; session: StoredSession; jugador: string; minutes: number | null }[],
+  rows: {
+    callUpId: string;
+    session: StoredSession;
+    jugador: string;
+    /** Total (se usa si no hay partes) */
+    minutes: number | null;
+    minutes1?: number | null;
+    minutes2?: number | null;
+  }[],
 ): Promise<void> {
   if (rows.length === 0) return;
   await apiPost("upsert", "minutes", {
@@ -284,6 +305,8 @@ export async function saveMinutesBatch(
       jugador: r.jugador.trim(),
       // Número, no texto: así Google Sheets no lo interpreta como fecha
       minutos: r.minutes === null ? "" : r.minutes,
+      minutos1: r.minutes1 == null ? "" : r.minutes1,
+      minutos2: r.minutes2 == null ? "" : r.minutes2,
     })),
   });
 }
