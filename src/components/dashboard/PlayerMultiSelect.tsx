@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Users } from "lucide-react";
-import { getPlayerPhoto } from "@/lib/player-photos";
 import { normName } from "@/lib/recovery";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 /** Valor especial: ningún jugador seleccionado ([] significa "todos") */
 export const NONE = "__ninguno__";
@@ -183,24 +183,5 @@ export function PlayerMultiSelect({ players, value, onChange, compact }: Props) 
 }
 
 function Avatar({ name }: { name: string }) {
-  const [failed, setFailed] = useState(false);
-  const src = getPlayerPhoto(name);
-  if (!src || failed)
-    return (
-      <span className="size-5 rounded-full border grid place-items-center text-[8px] font-semibold text-muted-foreground shrink-0">
-        {name
-          .split(/\s+/)
-          .slice(0, 2)
-          .map((w) => w[0])
-          .join("")}
-      </span>
-    );
-  return (
-    <img
-      src={src}
-      alt=""
-      onError={() => setFailed(true)}
-      className="size-5 rounded-full object-cover shrink-0"
-    />
-  );
+  return <PlayerAvatar name={name} size={20} />;
 }

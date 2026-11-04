@@ -10,6 +10,7 @@ import JugadoresRoute from "./routes/jugadores";
 import PortalRoute from "./routes/portal";
 import ConvocatoriasIdIndexRoute from "./routes/convocatorias.$id.index";
 import ConvocatoriasIdJugadorPlayerIdRoute from "./routes/convocatorias.$id.jugador.$playerId";
+import { PlayerAvatarStyleProvider } from "@/components/PlayerAvatar";
 
 const router = createBrowserRouter([
   {
@@ -40,7 +41,9 @@ const router = createBrowserRouter([
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <PlayerAvatarStyleProvider>
+      <RouterProvider router={router} />
+    </PlayerAvatarStyleProvider>
     <Toaster />
   </React.StrictMode>,
 );

@@ -1,35 +1,17 @@
 /**
  * Piezas comunes de las tarjetas por jugador ("Informe jugadores" y "Recuperación").
  */
-import { useState } from "react";
 import { getPlayerPhoto } from "@/lib/player-photos";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 /** Foto pequeña en la tarjeta: permite ver de un vistazo qué jugadores no tienen foto. */
 export function CardAvatar({ name }: { name: string }) {
-  const src = getPlayerPhoto(name);
-  const [failed, setFailed] = useState(false);
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join("");
-  if (!src || failed) {
-    return (
-      <div
-        className="size-9 shrink-0 rounded-full border border-dashed grid place-items-center text-[11px] font-semibold text-muted-foreground"
-        title="Sin foto: revisa src/lib/player-photos.ts"
-      >
-        {initials}
-      </div>
-    );
-  }
+  const hasPhoto = !!getPlayerPhoto(name);
   return (
-    <img
-      src={src}
-      alt={name}
-      onError={() => setFailed(true)}
-      className="size-9 shrink-0 rounded-full object-cover border"
+    <PlayerAvatar
+      name={name}
+      size={36}
+      title={hasPhoto ? name : "Sin foto: revisa src/lib/player-photos.ts"}
     />
   );
 }
