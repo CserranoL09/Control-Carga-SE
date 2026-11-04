@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { saveCallUp, deleteCallUp, updateCallUp, type StoredCallUp } from "@/lib/store";
 import { useCallUps } from "@/hooks/useLoadData";
+import { useConnection, OFFLINE_SAVE_MSG } from "@/lib/offline";
 
 export default function Convocatorias() {
   useEffect(() => {
@@ -102,8 +103,7 @@ function CallUpCard({
 
   async function toggleStatus(e: React.MouseEvent) {
     e.preventDefault();
-    const next: StoredCallUp["status"] =
-      callUp.status === "En curso" ? "Finalizada" : "En curso";
+    const next: StoredCallUp["status"] = callUp.status === "En curso" ? "Finalizada" : "En curso";
     setBusy(true);
     try {
       await updateCallUp(callUp.id, { status: next }, callUp);
@@ -133,7 +133,7 @@ function CallUpCard({
           {callUp.status}
         </button>
         <div className="flex items-center gap-1">
-        <button
+          <button
             onClick={handleDelete}
             disabled={busy}
             className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all disabled:opacity-40"
@@ -175,6 +175,7 @@ function CallUpCard({
 // ─── New call-up dialog ───────────────────────────────────────────────────────
 
 function NuevaConvocatoriaDialog({ onCreated }: { onCreated: () => void }) {
+  const { online } = useConnection();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -223,8 +224,8 @@ function NuevaConvocatoriaDialog({ onCreated }: { onCreated: () => void }) {
         <DialogHeader>
           <DialogTitle>Nueva convocatoria</DialogTitle>
           <DialogDescription>
-            Define los datos de la concentración. Los jugadores se detectan automáticamente
-            desde las respuestas del formulario en ese rango de fechas.
+            Define los datos de la concentración. Los jugadores se detectan automáticamente desde
+            las respuestas del formulario en ese rango de fechas.
           </DialogDescription>
         </DialogHeader>
 
@@ -310,7 +311,12 @@ function NuevaConvocatoriaDialog({ onCreated }: { onCreated: () => void }) {
           <DialogClose asChild>
             <Button variant="outline">Cancelar</Button>
           </DialogClose>
-          <Button type="button" onClick={handleCreate} disabled={!valid || saving}>
+          <Button
+            type="button"
+            onClick={handleCreate}
+            disabled={!valid || saving || !online}
+            title={online ? undefined : OFFLINE_SAVE_MSG}
+          >
             {saving ? "Guardando…" : "Crear convocatoria"}
           </Button>
         </DialogFooter>

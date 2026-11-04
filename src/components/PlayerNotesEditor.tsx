@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { deleteNote, newNoteId, samePlayer, saveNote, type StoredNote } from "@/lib/store";
+import { useConnection, OFFLINE_SAVE_MSG } from "@/lib/offline";
 
 export const NOTE_TITLE_MAX = 80;
 export const NOTE_TEXT_MAX = 2000;
@@ -285,6 +286,7 @@ function NoteCard({
   onDelete: () => void;
   onMove: (dir: -1 | 1) => void;
 }) {
+  const { online } = useConnection();
   const ta = useRef<HTMLTextAreaElement>(null);
 
   // Textarea autoajustable
@@ -397,8 +399,8 @@ function NoteCard({
           <button
             type="button"
             onClick={onSave}
-            disabled={b.status !== "sin-guardar"}
-            title="Guardar (Ctrl/Cmd + S)"
+            disabled={b.status !== "sin-guardar" || !online}
+            title={online ? "Guardar (Ctrl/Cmd + S)" : OFFLINE_SAVE_MSG}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground font-medium hover:opacity-90 disabled:opacity-40"
           >
             <Save className="size-3.5" /> Guardar

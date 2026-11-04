@@ -23,6 +23,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { OFFLINE_SAVE_MSG, setUnsavedChanges, useConnection } from "@/lib/offline";
 
 interface MinutosTabProps {
   callUpId: string;
@@ -45,6 +46,8 @@ const VISTA_LABEL: Record<Vista, string> = {
   p2: "2ª parte",
   partes: "Por partes",
 };
+/** Etiquetas cortas para la barra de la tabla (la larga va en el tooltip) */
+const VISTA_CORTA: Record<Vista, string> = { total: "Total", p1: "1ª", p2: "2ª", partes: "Partes" };
 const VISTA_KEY = "minutos-tabla-vista";
 /** Minutos por encima de los cuales una parte se marca en naranja */
 const PART_WARN = 20;
@@ -135,6 +138,7 @@ export function MinutosTab({
   const matches = useMemo(() => sessions.filter(isMatchSession), [sessions]);
   const [extraPlayers, setExtraPlayers] = useState<string[]>([]);
   const [newPlayer, setNewPlayer] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Vista de la tabla (recordada)
@@ -180,10 +184,17 @@ export function MinutosTab({
 
   const [draft, setDraft] = useState<Record<string, string>>(saved);
   useEffect(() => setDraft(saved), [saved]);
+  const { online } = useConnection();
 
   const dirtyKeys = Object.keys({ ...saved, ...draft }).filter(
     (k) => (draft[k] ?? "").trim() !== (saved[k] ?? ""),
   );
+  // Avisar a la app de que hay minutos sin guardar (no actualizar a mitad)
+  const hasDirty = dirtyKeys.length > 0;
+  useEffect(() => {
+    setUnsavedChanges(hasDirty);
+    return () => setUnsavedChanges(false);
+  }, [hasDirty]);
   const invalidKeys = new Set(
     Object.entries(draft)
       .filter(([, v]) => Number.isNaN(parseMinutesInput(v)))
@@ -366,6 +377,7 @@ export function MinutosTab({
         });
     }
     setNewPlayer("");
+    setAddOpen(false);
   }
 
   async function handleSave() {
@@ -514,10 +526,16 @@ export function MinutosTab({
         <div className="px-4 py-2 border-b flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Timer className="size-4 text-muted-foreground" />
-            <h3 className="text-sm font-medium">Minutos de juego</h3>
-            <span className="text-[11px] text-muted-foreground">Formato: 25 · 25,5 · 25:30</span>
+            <h3 className="text-sm font-medium whitespace-nowrap">Minutos de juego</h3>
+            <span
+              className="grid place-items-center size-4 rounded-full border text-[10px] text-muted-foreground cursor-help"
+              title="Formato: 25 · 25,5 · 25:30"
+              aria-label="Formato: 25 · 25,5 · 25:30"
+            >
+              ?
+            </span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5" data-testid="minutos-barra">
             <div
               className="inline-flex rounded-md border p-0.5 bg-muted/30 text-xs"
               role="group"
@@ -529,13 +547,15 @@ export function MinutosTab({
                   type="button"
                   onClick={() => setVista(v)}
                   aria-pressed={vista === v}
-                  className={`px-2.5 py-1 rounded font-medium transition-colors ${
+                  aria-label={VISTA_LABEL[v]}
+                  title={VISTA_LABEL[v]}
+                  className={`px-2 py-1 rounded font-medium transition-colors whitespace-nowrap ${
                     vista === v
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {VISTA_LABEL[v]}
+                  {VISTA_CORTA[v]}
                 </button>
               ))}
             </div>
@@ -545,7 +565,10 @@ export function MinutosTab({
               onChange={(list) => setTableFilter({ ...tableFilter, list })}
               compact
             />
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+            <label
+              className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none whitespace-nowrap"
+              title="Solo jugadores con minutos"
+            >
               <input
                 type="checkbox"
                 checked={tableFilter.soloConMinutos}
@@ -553,45 +576,73 @@ export function MinutosTab({
                   setTableFilter({ ...tableFilter, soloConMinutos: e.target.checked })
                 }
               />
-              Solo con minutos
+              <span className="sr-only">Solo </span>Con minutos
             </label>
             {filterActive && (
-              <span className="text-[11px] text-muted-foreground" data-testid="minutos-mostrando">
-                Mostrando {tableRows.length} de {roster.length}
+              <span
+                className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground whitespace-nowrap"
+                data-testid="minutos-mostrando"
+                title={`Mostrando ${tableRows.length} de ${roster.length} jugadores`}
+              >
+                <span className="sr-only">Mostrando </span>
+                {tableRows.length}
+                <span className="sr-only"> de </span>
+                <span aria-hidden>/</span>
+                {roster.length}
                 <button
                   type="button"
                   onClick={() => setTableFilter({ list: [], soloConMinutos: false })}
-                  className="ml-1.5 text-primary hover:underline"
+                  className="text-primary hover:underline"
+                  aria-label="Quitar filtro"
+                  title="Quitar filtro"
                 >
-                  Quitar filtro
+                  ✕
                 </button>
               </span>
             )}
-            <span className="w-px h-5 bg-border mx-1" aria-hidden />
+            <span className="w-px h-5 bg-border mx-0.5" aria-hidden />
             <button
               type="button"
               onClick={() => openImport(null)}
-              className="h-8 text-xs flex items-center gap-1.5 px-3 rounded-md border hover:bg-accent"
-              title="Rellenar los minutos de un partido desde una imagen (también puedes arrastrarla o pegarla)"
+              className="size-8 grid place-items-center rounded-md border hover:bg-accent text-muted-foreground"
+              aria-label="Cargar imagen"
+              title="Cargar imagen: rellenar los minutos de un partido desde una imagen (también puedes arrastrarla o pegarla)"
             >
-              <ImageUp className="size-3.5" /> Cargar imagen
+              <ImageUp className="size-4" />
             </button>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 addPlayer();
               }}
-              className="flex items-center gap-1.5"
+              className="relative flex items-center"
             >
-              <Input
-                value={newPlayer}
-                onChange={(e) => setNewPlayer(e.target.value)}
-                placeholder="Añadir jugador"
-                className="h-8 text-xs md:text-xs w-40"
-              />
+              {addOpen && (
+                <div className="absolute right-0 top-full mt-1 z-40 rounded-md border bg-popover p-1.5 shadow-lg">
+                  <Input
+                    autoFocus
+                    value={newPlayer}
+                    onChange={(e) => setNewPlayer(e.target.value)}
+                    onKeyDown={(e) => e.key === "Escape" && (setNewPlayer(""), setAddOpen(false))}
+                    onBlur={() => !newPlayer.trim() && setAddOpen(false)}
+                    placeholder="Añadir jugador"
+                    className="h-8 text-xs md:text-xs w-48"
+                  />
+                  <div className="text-[10px] text-muted-foreground mt-1 px-0.5">
+                    Enter para añadir · Esc para cerrar
+                  </div>
+                </div>
+              )}
               <button
-                type="submit"
+                type={addOpen ? "submit" : "button"}
+                onClick={(e) => {
+                  if (!addOpen) {
+                    e.preventDefault();
+                    setAddOpen(true);
+                  }
+                }}
                 className="size-8 grid place-items-center rounded-md border hover:bg-accent text-muted-foreground"
+                aria-label="Añadir jugador"
                 title="Añadir jugador a la lista"
               >
                 <Plus className="size-3.5" />
@@ -601,15 +652,19 @@ export function MinutosTab({
               <button
                 onClick={() => setDraft(saved)}
                 disabled={saving}
-                className="h-8 text-xs flex items-center gap-1.5 px-3 rounded-md border hover:bg-accent disabled:opacity-50"
+                aria-label="Descartar"
+                title="Descartar los cambios sin guardar"
+                className="h-8 text-xs flex items-center gap-1.5 px-2.5 rounded-md border hover:bg-accent disabled:opacity-50 whitespace-nowrap"
               >
-                <Undo2 className="size-3.5" /> Descartar
+                <Undo2 className="size-3.5" />
+                <span className="sr-only lg:not-sr-only">Descartar</span>
               </button>
             )}
             <button
               onClick={handleSave}
-              disabled={saving || dirtyKeys.length === 0}
-              className="h-8 text-xs flex items-center gap-1.5 px-3 rounded-md bg-primary text-primary-foreground font-medium hover:opacity-90 disabled:opacity-50"
+              disabled={saving || dirtyKeys.length === 0 || !online}
+              title={online ? undefined : OFFLINE_SAVE_MSG}
+              className="h-8 text-xs flex items-center gap-1.5 px-3 whitespace-nowrap rounded-md bg-primary text-primary-foreground font-medium hover:opacity-90 disabled:opacity-50"
             >
               {saving ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -625,7 +680,7 @@ export function MinutosTab({
 
         {roster.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">
-            Aún no hay jugadores. Añádelos con el campo "Añadir jugador".
+            Aún no hay jugadores. Añádelos con el botón «+» (Añadir jugador).
           </div>
         ) : (
           <div ref={wrapRef} className="overflow-x-auto overflow-y-hidden">
