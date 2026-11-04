@@ -2,7 +2,6 @@ import { exportElementToPdf } from "@/lib/pdf-export";
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
-import { getPlayerPhoto } from "@/lib/player-photos";
 import { MetricCard } from "@/components/MetricCard";
 import { players as allPlayers } from "@/lib/mock-data";
 import { getLoadThresholds } from "@/lib/store";
@@ -32,6 +31,7 @@ import {
   ReferenceArea,
   Legend,
 } from "recharts";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 const tooltipStyle = {
   background: "var(--popover)",
@@ -51,25 +51,24 @@ function safeDecode(v: string): string {
 
 export default function Page() {
   const { id, playerId } = useParams<{ id: string; playerId: string }>();
-  const {
-    callUp,
-    sessions,
-    responses,
-    minutes,
-    notes,
-    notesSupported,
-    loading,
-    error,
-  } = useCallUpDashboard(id);
+  const { callUp, sessions, responses, minutes, notes, notesSupported, loading, error } =
+    useCallUpDashboard(id);
   const [reportNotes, setReportNotes] = useState<ReportNote[]>([]);
 
   // playerId puede ser el id antiguo de la lista fija (p7) o el nombre del jugador en el Form
   const normalize = (name: string) =>
-    name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toUpperCase();
+    name
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toUpperCase();
   const requested = safeDecode(playerId ?? "");
-  const listed = allPlayers.find((x) => x.id === requested)
-    ?? allPlayers.find((x) => normalize(x.name) === normalize(requested));
-  const formName = responses.find((r) => normalize(r.jugador) === normalize(listed?.name ?? requested))?.jugador;
+  const listed =
+    allPlayers.find((x) => x.id === requested) ??
+    allPlayers.find((x) => normalize(x.name) === normalize(requested));
+  const formName = responses.find(
+    (r) => normalize(r.jugador) === normalize(listed?.name ?? requested),
+  )?.jugador;
   const playerName = formName ?? listed?.name ?? requested;
   const mockPlayer = playerName
     ? {
@@ -125,12 +124,12 @@ export default function Page() {
 
   // Filter responses belonging to this player using normalized comparison
   const playerResponses = responses.filter(
-    (r) => normalizeName(r.jugador) === normalizeName(mockPlayer.name)
+    (r) => normalizeName(r.jugador) === normalizeName(mockPlayer.name),
   );
 
   // Sort sessions chronologically
   const sortedSessions = [...sessions].sort((a, b) => {
-    const priority: Record<string, number> = { "M": 1, "M-T": 2, "": 3, "T": 4 };
+    const priority: Record<string, number> = { M: 1, "M-T": 2, "": 3, T: 4 };
     const dateComp = a.date.localeCompare(b.date);
     if (dateComp !== 0) return dateComp;
     const pA = priority[a.dayLabel] ?? 99;
@@ -180,9 +179,11 @@ export default function Page() {
   });
 
   const completedSessions = rawData.filter((d) => d.hasResponse);
-  
+
   // Calculate RPE-based ACWR series for the graphs on this page
-  const acwrCargaSeries = calcACWRSeries(completedSessions.map((d) => ({ date: d.date, ua: d.ua })));
+  const acwrCargaSeries = calcACWRSeries(
+    completedSessions.map((d) => ({ date: d.date, ua: d.ua })),
+  );
 
   const data = rawData.map((d) => {
     if (!d.hasResponse) {
@@ -198,7 +199,7 @@ export default function Page() {
   const fatAvg = avg(respondedData.map((d) => d.fatiga));
   const uaTot = respondedData.reduce((acc, d) => acc + d.ua, 0);
   const maxUa = respondedData.length > 0 ? Math.max(...respondedData.map((d) => d.ua)) : 0;
-  
+
   const status = uaStatus(maxUa);
   const statusLabel =
     status === "riesgo" ? "Riesgo" : status === "moderado" ? "Precaución" : "Normal";
@@ -221,7 +222,10 @@ export default function Page() {
     }
 
     try {
-      await exportElementToPdf(el, `Reporte_Carga_${mockPlayer.name.replace(/\s+/g, "_")}_${callUp.name.replace(/\s+/g, "_")}.pdf`);
+      await exportElementToPdf(
+        el,
+        `Reporte_Carga_${mockPlayer.name.replace(/\s+/g, "_")}_${callUp.name.replace(/\s+/g, "_")}.pdf`,
+      );
       toast.success("¡Reporte PDF descargado!");
     } catch (err) {
       console.error(err);
@@ -242,17 +246,7 @@ export default function Page() {
         </Link>
         <div className="flex items-center justify-between mt-2 flex-wrap gap-4">
           <div className="flex items-center gap-4">
-               {getPlayerPhoto(mockPlayer.name) ? (
-                 <img
-                   src={getPlayerPhoto(mockPlayer.name)}
-                   alt={mockPlayer.name}
-                   className="size-14 rounded-full object-cover border-2 border-border"
-                 />
-               ) : (
-                 <div className="size-14 rounded-full bg-accent grid place-items-center text-xl font-bold">
-                   {mockPlayer.number}
-                 </div>
-               )}
+            <PlayerAvatar name={mockPlayer.name} size={56} />
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">{mockPlayer.name}</h1>
               <p className="text-sm text-muted-foreground">
@@ -316,8 +310,8 @@ export default function Page() {
           <div className="rounded-lg border border-[color:var(--danger)]/40 bg-[color:var(--danger)]/10 p-4">
             <div className="flex items-center gap-2 text-[color:var(--danger)] text-sm font-medium">
               <AlertTriangle className="size-4" />
-              {alerts.length} sesión{alerts.length > 1 ? "es" : ""} con carga elevada (UA &gt; {moderado})
-              para {mockPlayer.name}
+              {alerts.length} sesión{alerts.length > 1 ? "es" : ""} con carga elevada (UA &gt;{" "}
+              {moderado}) para {mockPlayer.name}
             </div>
           </div>
         )}
@@ -339,8 +333,20 @@ export default function Page() {
                 <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                 <Tooltip contentStyle={tooltipStyle} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="rpe" stroke="var(--chart-1)" strokeWidth={2} name="RPE" />
-                <Line type="monotone" dataKey="fatiga" stroke="var(--chart-2)" strokeWidth={2} name="Fatiga" />
+                <Line
+                  type="monotone"
+                  dataKey="rpe"
+                  stroke="var(--chart-1)"
+                  strokeWidth={2}
+                  name="RPE"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="fatiga"
+                  stroke="var(--chart-2)"
+                  strokeWidth={2}
+                  name="Fatiga"
+                />
               </LineChart>
             </ResponsiveContainer>
           </Panel>
@@ -426,13 +432,21 @@ export default function Page() {
             <table className="w-full text-sm">
               <thead className="bg-muted/40 text-xs text-muted-foreground">
                 <tr>
-                  {["Fecha", "Sesión", "Tipo", "Dur", "RPE", "Fatiga", "UA (Carga)", "A:C (Carga)", "Estado"].map(
-                    (h) => (
-                      <th key={h} className="text-left font-medium px-3 py-2">
-                        {h}
-                      </th>
-                    ),
-                  )}
+                  {[
+                    "Fecha",
+                    "Sesión",
+                    "Tipo",
+                    "Dur",
+                    "RPE",
+                    "Fatiga",
+                    "UA (Carga)",
+                    "A:C (Carga)",
+                    "Estado",
+                  ].map((h) => (
+                    <th key={h} className="text-left font-medium px-3 py-2">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -446,7 +460,7 @@ export default function Page() {
                     }
                     return dateStr;
                   }
-                  
+
                   return (
                     <tr key={d.id} className="border-t hover:bg-muted/20">
                       <td className="px-3 py-2 tabular-nums text-xs">{formatDateES(d.date)}</td>
@@ -475,10 +489,16 @@ export default function Page() {
                               className="size-2 rounded-full"
                               style={{ background: statusColor(st) }}
                             />
-                            {st === "riesgo" ? "Riesgo" : st === "moderado" ? "Precaución" : "Óptimo"}
+                            {st === "riesgo"
+                              ? "Riesgo"
+                              : st === "moderado"
+                                ? "Precaución"
+                                : "Óptimo"}
                           </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground italic">Sin respuesta</span>
+                          <span className="text-xs text-muted-foreground italic">
+                            Sin respuesta
+                          </span>
                         )}
                       </td>
                     </tr>
@@ -489,7 +509,7 @@ export default function Page() {
           </div>
         </div>
       </div>
-      
+
       {/* Hidden layout for PDF exports */}
       {exporting && callUp && (
         <PlayerReportPDF

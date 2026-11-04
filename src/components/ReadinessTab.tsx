@@ -21,7 +21,6 @@ import {
 import type { SessionMetrics } from "@/lib/metrics";
 import type { StoredMinutes, StoredRecovery } from "@/lib/store";
 import { buildRecovery, normName } from "@/lib/recovery";
-import { getPlayerPhoto } from "@/lib/player-photos";
 import { downloadBlob } from "@/lib/pdf-export";
 import {
   calcReadiness,
@@ -34,6 +33,7 @@ import {
   type ReadinessEntry,
   type Semaforo,
 } from "@/lib/readiness";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 interface ReadinessTabProps {
   sessionMetrics: SessionMetrics[];
@@ -469,37 +469,14 @@ export function ReadinessTab({
 }
 
 function PlayerReadinessCard({ entry: e }: { entry: ReadinessEntry }) {
-  const [photoFailed, setPhotoFailed] = useState(false);
-  const photo = getPlayerPhoto(e.jugador);
   const info = SEMAFORO_INFO[e.semaforo];
-  const initials = e.jugador
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join("");
 
   return (
     <div
       className={`rounded-lg border bg-card p-3 flex flex-col gap-2.5 ${e.incompleto ? "opacity-70" : ""}`}
     >
       <div className="flex items-center gap-3">
-        {photo && !photoFailed ? (
-          <img
-            src={photo}
-            alt={e.jugador}
-            onError={() => setPhotoFailed(true)}
-            className="size-11 rounded-full object-cover border-2 shrink-0"
-            style={{ borderColor: info.color }}
-          />
-        ) : (
-          <div
-            className="size-11 rounded-full grid place-items-center text-sm font-semibold border-2 shrink-0"
-            style={{ borderColor: info.color }}
-          >
-            {initials}
-          </div>
-        )}
+        <PlayerAvatar name={e.jugador} size={44} accent={info.color} />
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold truncate">{e.jugador}</div>
           <span

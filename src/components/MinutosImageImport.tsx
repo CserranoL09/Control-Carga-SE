@@ -8,7 +8,6 @@ import { ImageUp, Loader2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { formatMinutes, parseMinutesInput } from "@/lib/minutes";
-import { getPlayerPhoto } from "@/lib/player-photos";
 import type { StoredSession } from "@/lib/store";
 import {
   clearAliases,
@@ -25,6 +24,7 @@ import {
   type OcrJob,
   type OcrLine,
 } from "@/lib/minutes-ocr";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 export interface ExistingValues {
   p1: number | null;
@@ -554,16 +554,7 @@ export function MinutosImageImport({
 }
 
 function MiniPhoto({ name }: { name: string | null }) {
-  const [failed, setFailed] = useState(false);
-  const src = name ? getPlayerPhoto(name) : "";
-  if (!name || !src || failed)
-    return <span className="size-6 shrink-0 rounded-full border border-dashed bg-muted/40" />;
-  return (
-    <img
-      src={src}
-      alt=""
-      onError={() => setFailed(true)}
-      className="size-6 shrink-0 rounded-full object-cover border"
-    />
-  );
+  if (!name)
+    return <span className="size-6 shrink-0 rounded-md border border-dashed bg-muted/40" />;
+  return <PlayerAvatar name={name} size={24} />;
 }

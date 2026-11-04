@@ -10,6 +10,7 @@ import JugadoresRoute from "./routes/jugadores";
 import PortalRoute from "./routes/portal";
 import ConvocatoriasIdIndexRoute from "./routes/convocatorias.$id.index";
 import ConvocatoriasIdJugadorPlayerIdRoute from "./routes/convocatorias.$id.jugador.$playerId";
+import { clearOldAvatarPrefs } from "@/components/PlayerAvatar";
 
 const router = createBrowserRouter([
   {
@@ -37,6 +38,9 @@ const router = createBrowserRouter([
     element: <ConvocatoriasIdJugadorPlayerIdRoute />,
   },
 ]);
+
+// Las fotos ya no se configuran: limpiar preferencias antiguas
+clearOldAvatarPrefs();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

@@ -18,6 +18,7 @@ import {
   ReferenceArea,
   Legend,
 } from "recharts";
+import { PlayerAvatar as AppAvatar } from "@/components/PlayerAvatar";
 
 interface PlayerReportPDFProps {
   jugador: string;
@@ -794,65 +795,12 @@ function Escudo() {
 }
 
 /** Foto circular con el dorsal en una insignia dorada. Si no hay foto, círculo con el dorsal. */
-function PlayerAvatar({
-  src,
-  number,
-  name,
-}: {
-  src: string;
-  number: number | string;
-  name: string;
-}) {
-  const [failed, setFailed] = React.useState(false);
-  React.useEffect(() => setFailed(false), [src]);
+function PlayerAvatar({ number, name }: { src: string; number: number | string; name: string }) {
   const hasNumber = number !== "—" && number !== "" && number !== undefined;
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join("");
-
-  if (failed || !src) {
-    return (
-      <div
-        style={{
-          minWidth: "64px",
-          width: "64px",
-          height: "64px",
-          borderRadius: "50%",
-          border: `2px solid ${C.text}`,
-          backgroundColor: "rgba(255,255,255,0.08)",
-          color: C.text,
-          display: "grid",
-          placeItems: "center",
-          fontSize: hasNumber ? "24px" : "20px",
-          fontWeight: 800,
-          boxSizing: "border-box",
-        }}
-      >
-        {hasNumber ? number : initials}
-      </div>
-    );
-  }
-
+  const w = 64;
   return (
-    <div style={{ position: "relative", width: "64px", height: "64px", minWidth: "64px" }}>
-      <img
-        src={src}
-        alt={name}
-        onError={() => setFailed(true)}
-        style={{
-          width: "64px",
-          height: "64px",
-          borderRadius: "50%",
-          border: `2px solid ${C.text}`,
-          objectFit: "cover",
-          display: "block",
-          boxSizing: "border-box",
-          backgroundColor: "rgba(255,255,255,0.08)",
-        }}
-      />
+    <div style={{ position: "relative", width: `${w}px`, height: "64px", minWidth: `${w}px` }}>
+      <AppAvatar name={name} size={64} theme="pdf" />
       {hasNumber && (
         <div
           style={{
