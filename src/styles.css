@@ -96,3 +96,14 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
+
+
+/* App instalada (PWA): respetar las zonas seguras del móvil (notch, barra inferior) */
+@media (display-mode: standalone) {
+  .pwa-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pwa-safe-bottom {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+}

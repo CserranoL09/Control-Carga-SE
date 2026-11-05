@@ -12,10 +12,13 @@ import {
   PanelLeftOpen,
 } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
+import { InstallButton, OfflineBanner } from "@/components/pwa/PwaUi";
 
 const SIDEBAR_KEY = "sidebar-collapsed";
 
 function readCollapsed(): boolean {
+  // En el móvil el menú empieza recogido para que la página quepa en la pantalla
+  if (typeof window !== "undefined" && window.innerWidth < 768) return true;
   try {
     return localStorage.getItem(SIDEBAR_KEY) === "1";
   } catch {
@@ -54,56 +57,64 @@ export function AppLayout({ children }: { children: ReactNode }) {
         }`}
       >
         <div className="w-60 h-full flex flex-col">
-        <div className="px-5 py-5 flex items-center gap-3 border-b border-sidebar-border">
-          <img src="/logo se fs.png" alt="Logo" style={{ width: '70px' }} />
-          <div className="leading-tight">
-            <div className="text-sm font-semibold">Control de Carga</div>
-            <div className="text-[11px] text-muted-foreground">Selección absoluta</div>
+          <div className="px-5 py-5 flex items-center gap-3 border-b border-sidebar-border pwa-safe-top">
+            <img src="/logo se fs.png" alt="Logo" style={{ width: "70px" }} />
+            <div className="leading-tight">
+              <div className="text-sm font-semibold">Control de Carga</div>
+              <div className="text-[11px] text-muted-foreground">Selección absoluta</div>
+            </div>
           </div>
-        </div>
-        <nav className="p-3 flex-1 space-y-1">
-          {nav.map((n) => {
-            const active = n.to === "/" ? loc.pathname === "/" : loc.pathname.startsWith(n.to);
-            const Icon = n.icon;
-            return (
-              <Link
-                key={n.to}
-                to={n.to}
-                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/60"
+          <nav className="p-3 flex-1 space-y-1">
+            {nav.map((n) => {
+              const active = n.to === "/" ? loc.pathname === "/" : loc.pathname.startsWith(n.to);
+              const Icon = n.icon;
+              return (
+                <Link
+                  key={n.to}
+                  to={n.to}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                    active
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/60"
                   }`}
-              >
-                <Icon className="size-4" />
-                {n.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="p-4 border-t border-sidebar-border text-[11px] text-muted-foreground">
-          v1.0 · MVP
-        </div>
+                >
+                  <Icon className="size-4" />
+                  {n.label}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="p-4 border-t border-sidebar-border space-y-3 pwa-safe-bottom">
+            <InstallButton />
+            <div className="text-[11px] text-muted-foreground">v1.0 · MVP</div>
+          </div>
         </div>
       </aside>
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 border-b flex items-center justify-between px-6 bg-background/70 backdrop-blur sticky top-0 z-10">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              type="button"
-              onClick={() => setCollapsed((c) => !c)}
-              aria-label={collapsed ? "Mostrar menú" : "Ocultar menú"}
-              aria-expanded={!collapsed}
-              title={collapsed ? "Mostrar menú" : "Ocultar menú"}
-              className="p-1.5 -ml-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            >
-              {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-            </button>
-            <div className="text-sm text-muted-foreground truncate">
-              Selección Española de Fútbol Sala · Cuerpo Técnico
+        <div className="sticky top-0 z-10 pwa-safe-top bg-background/70 backdrop-blur">
+          <OfflineBanner />
+          <header className="h-14 border-b flex items-center justify-between px-6">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => setCollapsed((c) => !c)}
+                aria-label={collapsed ? "Mostrar menú" : "Ocultar menú"}
+                aria-expanded={!collapsed}
+                title={collapsed ? "Mostrar menú" : "Ocultar menú"}
+                className="p-1.5 -ml-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
+                {collapsed ? (
+                  <PanelLeftOpen className="size-4" />
+                ) : (
+                  <PanelLeftClose className="size-4" />
+                )}
+              </button>
+              <div className="text-sm text-muted-foreground truncate">
+                Selección Española de Fútbol Sala · Cuerpo Técnico
+              </div>
             </div>
-          </div>
-
-        </header>
+          </header>
+        </div>
         <main className="flex-1 min-w-0">{children}</main>
       </div>
     </div>

@@ -22,6 +22,7 @@ import {
   type SessionMetrics,
   type PlayerCallUpMetrics,
 } from "@/lib/metrics";
+import { onReconnect } from "@/lib/offline";
 
 // ─── Hook: lista de convocatorias ─────────────────────────────────────────────
 
@@ -46,6 +47,9 @@ export function useCallUps() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Al volver la conexión, recargar los datos
+  useEffect(() => onReconnect(() => refresh()), [refresh]);
 
   return { callUps, loading, error, refresh };
 }
@@ -131,6 +135,9 @@ export function useCallUpDashboard(callUpId: string | undefined): CallUpDashboar
   useEffect(() => {
     load(false);
   }, [load]);
+
+  // Al volver la conexión, recargar los datos (sin la caché de respuestas)
+  useEffect(() => onReconnect(() => load(true)), [load]);
 
   // Métricas derivadas
   const sessionMetrics = calcSessionMetrics(sessions, responses);
