@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/AppLayout";
+import { AppInfoSettings } from "@/components/pwa/PwaUi";
 import { getLoadThresholds, saveLoadThresholds } from "@/lib/store";
 import {
   DEFAULT_READINESS_CONFIG,
@@ -24,9 +25,7 @@ function StatusBadge({ status }: { status: ConnectionStatus | null }) {
   return (
     <span
       className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-        status.ok
-          ? "bg-green-100 text-green-700"
-          : "bg-red-100 text-red-700"
+        status.ok ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
       }`}
     >
       {status.ok ? "✓ Conectado" : `✗ ${status.error ?? "Error"}`}
@@ -107,7 +106,9 @@ export default function Ajustes() {
     const trimmedCsv = sheetsCsvUrl.trim();
 
     if (trimmedScript && !trimmedScript.startsWith("https://script.google.com/macros/s/")) {
-      toast.error("La URL de Apps Script no parece válida. Debe empezar por https://script.google.com/macros/s/…");
+      toast.error(
+        "La URL de Apps Script no parece válida. Debe empezar por https://script.google.com/macros/s/…",
+      );
       return;
     }
 
@@ -152,6 +153,9 @@ export default function Ajustes() {
             Configuración de umbrales, alertas e integración con Google Sheets.
           </p>
         </div>
+
+        {/* ── Aplicación (instalable) ─────────────────────────────────────────── */}
+        <AppInfoSettings />
 
         {/* ── Thresholds ─────────────────────────────────────────────────────── */}
         <div className="rounded-lg border bg-card p-5 space-y-5">
@@ -219,7 +223,8 @@ export default function Ajustes() {
           <div>
             <h3 className="text-sm font-medium">Readiness</h3>
             <p className="text-xs text-muted-foreground mt-1">
-              Pesos de cada componente (se reparten si falta alguno), semáforo y reglas de seguridad.
+              Pesos de cada componente (se reparten si falta alguno), semáforo y reglas de
+              seguridad.
             </p>
           </div>
 
@@ -239,7 +244,9 @@ export default function Ajustes() {
                     type="number"
                     min={0}
                     value={rcfg.weights[k]}
-                    onChange={(e) => setRcfg({ ...rcfg, weights: { ...rcfg.weights, [k]: num(e.target.value) } })}
+                    onChange={(e) =>
+                      setRcfg({ ...rcfg, weights: { ...rcfg.weights, [k]: num(e.target.value) } })
+                    }
                     className="w-16 px-2 py-1 rounded-md border bg-background text-sm text-right tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
                   />
                   <span className="text-xs text-muted-foreground">%</span>
@@ -254,7 +261,12 @@ export default function Ajustes() {
               <input
                 type="number"
                 value={rcfg.thresholds.verde}
-                onChange={(e) => setRcfg({ ...rcfg, thresholds: { ...rcfg.thresholds, verde: num(e.target.value) } })}
+                onChange={(e) =>
+                  setRcfg({
+                    ...rcfg,
+                    thresholds: { ...rcfg.thresholds, verde: num(e.target.value) },
+                  })
+                }
                 className="w-16 px-2 py-1 rounded-md border bg-background text-sm text-right tabular-nums"
               />
             </label>
@@ -263,7 +275,12 @@ export default function Ajustes() {
               <input
                 type="number"
                 value={rcfg.thresholds.amarillo}
-                onChange={(e) => setRcfg({ ...rcfg, thresholds: { ...rcfg.thresholds, amarillo: num(e.target.value) } })}
+                onChange={(e) =>
+                  setRcfg({
+                    ...rcfg,
+                    thresholds: { ...rcfg.thresholds, amarillo: num(e.target.value) },
+                  })
+                }
                 className="w-16 px-2 py-1 rounded-md border bg-background text-sm text-right tabular-nums"
               />
             </label>
@@ -272,7 +289,9 @@ export default function Ajustes() {
               <input
                 type="number"
                 value={rcfg.rules.recRojo}
-                onChange={(e) => setRcfg({ ...rcfg, rules: { ...rcfg.rules, recRojo: num(e.target.value) } })}
+                onChange={(e) =>
+                  setRcfg({ ...rcfg, rules: { ...rcfg.rules, recRojo: num(e.target.value) } })
+                }
                 className="w-16 px-2 py-1 rounded-md border bg-background text-sm text-right tabular-nums"
               />
             </label>
@@ -281,7 +300,9 @@ export default function Ajustes() {
               <input
                 type="number"
                 value={rcfg.rules.recAmarillo}
-                onChange={(e) => setRcfg({ ...rcfg, rules: { ...rcfg.rules, recAmarillo: num(e.target.value) } })}
+                onChange={(e) =>
+                  setRcfg({ ...rcfg, rules: { ...rcfg.rules, recAmarillo: num(e.target.value) } })
+                }
                 className="w-16 px-2 py-1 rounded-md border bg-background text-sm text-right tabular-nums"
               />
             </label>
@@ -291,7 +312,9 @@ export default function Ajustes() {
                 type="number"
                 step="0.1"
                 value={rcfg.rules.acwrAmarillo}
-                onChange={(e) => setRcfg({ ...rcfg, rules: { ...rcfg.rules, acwrAmarillo: num(e.target.value) } })}
+                onChange={(e) =>
+                  setRcfg({ ...rcfg, rules: { ...rcfg.rules, acwrAmarillo: num(e.target.value) } })
+                }
                 className="w-16 px-2 py-1 rounded-md border bg-background text-sm text-right tabular-nums"
               />
             </label>
@@ -327,8 +350,8 @@ export default function Ajustes() {
           <div>
             <h3 className="text-sm font-medium">Integración con Google Sheets</h3>
             <p className="text-xs text-muted-foreground mt-1">
-              Conecta la aplicación con tu hoja de cálculo para leer y escribir datos de convocatorias,
-              sesiones y respuestas de jugadores.
+              Conecta la aplicación con tu hoja de cálculo para leer y escribir datos de
+              convocatorias, sesiones y respuestas de jugadores.
             </p>
           </div>
 
@@ -338,7 +361,8 @@ export default function Ajustes() {
               URL de la Web App (Apps Script)
             </label>
             <p className="text-xs text-muted-foreground">
-              La obtienes en Google Sheets → Extensiones → Apps Script → Implementar → Administrar implementaciones.
+              La obtienes en Google Sheets → Extensiones → Apps Script → Implementar → Administrar
+              implementaciones.
             </p>
             <input
               type="url"
@@ -358,7 +382,9 @@ export default function Ajustes() {
               URL de la hoja publicada (CSV — para leer respuestas)
             </label>
             <p className="text-xs text-muted-foreground">
-              En Google Sheets → Archivo → Compartir → Publicar en la web → selecciona la hoja de respuestas del formulario (por ej. &quot;Respuestas de formulario 1&quot;) y formato &quot;CSV&quot; → Publicar. Copia la URL resultante.
+              En Google Sheets → Archivo → Compartir → Publicar en la web → selecciona la hoja de
+              respuestas del formulario (por ej. &quot;Respuestas de formulario 1&quot;) y formato
+              &quot;CSV&quot; → Publicar. Copia la URL resultante.
             </p>
             <input
               type="url"

@@ -83,6 +83,7 @@ import { DashboardTab } from "@/components/dashboard/DashboardTab";
 import { formatMinutes, playerMinutesSummary } from "@/lib/minutes";
 import { samePlayer, type StoredMinutes } from "@/lib/store";
 import { players as allPlayers } from "@/lib/mock-data";
+import { useConnection, OFFLINE_SAVE_MSG } from "@/lib/offline";
 
 const normalizeName = (name: string) =>
   name
@@ -323,7 +324,7 @@ export default function ConvocatoriaPage() {
   return (
     <AppLayout>
       <div className={`px-8 pt-6 border-b ${tab === "minutos" ? "pb-3" : "pb-6"}`}>
-        <div className="flex items-end justify-between">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <Link to="/" className="text-xs text-muted-foreground hover:text-foreground">
               ← Convocatorias
@@ -335,7 +336,7 @@ export default function ConvocatoriaPage() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {loading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
             {players.length > 0 && (
               <PlayerFilter
@@ -411,7 +412,8 @@ export default function ConvocatoriaPage() {
         {error && (
           <div className="rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-3 text-xs text-yellow-700 dark:text-yellow-300 flex items-center gap-2">
             <AlertTriangle className="size-4 shrink-0" />
-            No se pudo conectar con Google Sheets. Mostrando datos en caché. ({error})
+            No se pudo conectar con Google Sheets y no hay datos guardados en este dispositivo. (
+            {error})
           </div>
         )}
 
@@ -1161,6 +1163,7 @@ function SesionesTab({
   sessions: StoredSession[];
   onChanged: () => void;
 }) {
+  const { online } = useConnection();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Inline editing state
@@ -1333,7 +1336,7 @@ function SesionesTab({
                           >
                             <button
                               onClick={() => handleDelete(s.id)}
-                              disabled={deletingId === s.id}
+                              disabled={deletingId === s.id || !online}
                               className="p-1 rounded hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors disabled:opacity-40"
                               title="Eliminar sesión"
                             >
@@ -2213,6 +2216,7 @@ function FatigaHeatmap({
 // ─── Nueva sesión dialog ──────────────────────────────────────────────────────
 
 function NuevaSesionDialog({ callUpId, onCreated }: { callUpId: string; onCreated: () => void }) {
+  const { online } = useConnection();
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState("");
   // Radix Select doesn't allow value="", so we use "single" to represent DayLabel ""
@@ -2312,7 +2316,11 @@ function NuevaSesionDialog({ callUpId, onCreated }: { callUpId: string; onCreate
           <DialogClose asChild>
             <Button variant="outline">Cancelar</Button>
           </DialogClose>
-          <Button onClick={handleCreate} disabled={!date || saving}>
+          <Button
+            onClick={handleCreate}
+            disabled={!date || saving || !online}
+            title={online ? undefined : OFFLINE_SAVE_MSG}
+          >
             {saving ? "Guardando…" : "Guardar sesión"}
           </Button>
         </DialogFooter>
@@ -2557,6 +2565,7 @@ function EditarConvocatoriaDialog({
   callUp: StoredCallUp;
   onUpdated: () => void;
 }) {
+  const { online } = useConnection();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(callUp.name);
   const [startDate, setStartDate] = useState(callUp.startDate);
@@ -2664,7 +2673,12 @@ function EditarConvocatoriaDialog({
           <DialogClose asChild>
             <Button variant="outline">Cancelar</Button>
           </DialogClose>
-          <Button type="button" onClick={handleSave} disabled={!valid || saving}>
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={!valid || saving || !online}
+            title={online ? undefined : OFFLINE_SAVE_MSG}
+          >
             {saving ? "Guardando…" : "Guardar cambios"}
           </Button>
         </DialogFooter>

@@ -3,6 +3,8 @@ import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import "./styles.css";
 import { Toaster } from "@/components/ui/sonner";
+import { UpdatePrompt } from "@/components/pwa/PwaUi";
+import { initPwa } from "@/lib/pwa";
 
 import IndexRoute from "./routes/index";
 import AjustesRoute from "./routes/ajustes";
@@ -38,9 +40,13 @@ const router = createBrowserRouter([
   },
 ]);
 
+// App instalable: escuchar desde el arranque el aviso de instalación del navegador
+initPwa();
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <RouterProvider router={router} />
     <Toaster />
+    <UpdatePrompt />
   </React.StrictMode>,
 );

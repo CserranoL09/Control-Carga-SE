@@ -1,5 +1,6 @@
 /**
- * Sheets Store — sin localStorage, sin caché.
+ * Sheets Store. Los datos se leen de la Google Apps Script Web App; la última
+ * lectura correcta se guarda para poder verla sin conexión (ver ./offline.ts).
  * Todas las operaciones van directamente a la Google Apps Script Web App.
  *
  * Hoja "Convocatorias": id | nombre | fechaInicio | fechaFin | sede | estado | notas
@@ -8,6 +9,7 @@
 
 import { parseToIsoDate, formatDateShort } from "./date-utils";
 import { getAppsScriptUrl } from "./config";
+import { fetchAppsScriptJson, isOffline, OFFLINE_SAVE_MSG } from "./offline";
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── ⚙️ Umbrales de carga ─────────────────────────────────────────────────────
@@ -166,42 +168,49 @@ interface AllData {
 }
 
 async function apiGet(): Promise<AllData> {
-  const res = await fetch(getAppsScriptUrl(), { cache: "no-cache" });
-  if (!res.ok) throw new Error(`Apps Script GET falló: HTTP ${res.status}`);
-  const data = await res.json();
+  // Con copia sin conexión: si no hay red, se usan los últimos datos guardados
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = await fetchAppsScriptJson<Record<string, any>>(getAppsScriptUrl());
 
-  const callUps: StoredCallUp[] = (data.callUps ?? []).map((r: Record<string, string>) => ({
-    id: r.id,
-    name: r.nombre,
-    startDate: r.fechaInicio,
-    endDate: r.fechaFin,
-    location: r.sede,
-    status: (r.estado as StoredCallUp["status"]) || "En curso",
-    notes: r.notas ?? "",
-  })).filter((c: StoredCallUp) => !!c.id);
+  const callUps: StoredCallUp[] = (data.callUps ?? [])
+    .map((r: Record<string, string>) => ({
+      id: r.id,
+      name: r.nombre,
+      startDate: r.fechaInicio,
+      endDate: r.fechaFin,
+      location: r.sede,
+      status: (r.estado as StoredCallUp["status"]) || "En curso",
+      notes: r.notas ?? "",
+    }))
+    .filter((c: StoredCallUp) => !!c.id);
 
-  const sessions: StoredSession[] = (data.sessions ?? []).map((r: Record<string, string>) => ({
-    id: r.id,
-    callUpId: r.convocatoriaId,
-    date: r.fecha,
-    dayLabel: (r.diaLabel as DayLabel) || "",
-    type: (r.tipo as SessionType) || "TEC-TAC",
-    duration: parseInt(r.duracion, 10) || 0,
-  })).filter((s: StoredSession) => !!s.id);
+  const sessions: StoredSession[] = (data.sessions ?? [])
+    .map((r: Record<string, string>) => ({
+      id: r.id,
+      callUpId: r.convocatoriaId,
+      date: r.fecha,
+      dayLabel: (r.diaLabel as DayLabel) || "",
+      type: (r.tipo as SessionType) || "TEC-TAC",
+      duration: parseInt(r.duracion, 10) || 0,
+    }))
+    .filter((s: StoredSession) => !!s.id);
 
   const minutesSupported = Array.isArray(data.minutes);
-  const minutes: StoredMinutes[] = (data.minutes ?? []).map((r: Record<string, string>) => ({
-    id: r.id,
-    callUpId: r.convocatoriaId,
-    sessionId: r.sesionId,
-    date: parseToIsoDate(r.fecha) || r.fecha,
-    jugador: (r.jugador ?? "").trim(),
-    minutes: Number(String(r.minutos).replace(",", ".")),
-    minutes1: toPart(r.minutos1),
-    minutes2: toPart(r.minutos2),
-  })).filter((m: StoredMinutes) =>
-    !!m.id && !!m.jugador && isFinite(m.minutes) && m.minutes >= 0 && m.minutes <= 300,
-  );
+  const minutes: StoredMinutes[] = (data.minutes ?? [])
+    .map((r: Record<string, string>) => ({
+      id: r.id,
+      callUpId: r.convocatoriaId,
+      sessionId: r.sesionId,
+      date: parseToIsoDate(r.fecha) || r.fecha,
+      jugador: (r.jugador ?? "").trim(),
+      minutes: Number(String(r.minutos).replace(",", ".")),
+      minutes1: toPart(r.minutos1),
+      minutes2: toPart(r.minutos2),
+    }))
+    .filter(
+      (m: StoredMinutes) =>
+        !!m.id && !!m.jugador && isFinite(m.minutes) && m.minutes >= 0 && m.minutes <= 300,
+    );
 
   const recoverySupported = Array.isArray(data.recovery);
   const recovery: StoredRecovery[] = (data.recovery ?? [])
@@ -211,7 +220,10 @@ async function apiGet(): Promise<AllData> {
       valor: Number(String(r.valor).replace(",", ".")),
       timestamp: String(r.timestamp ?? ""),
     }))
-    .filter((r: StoredRecovery) => r.jugador && r.fecha && isFinite(r.valor) && r.valor >= 0 && r.valor <= 10);
+    .filter(
+      (r: StoredRecovery) =>
+        r.jugador && r.fecha && isFinite(r.valor) && r.valor >= 0 && r.valor <= 10,
+    );
 
   const notesSupported = Array.isArray(data.notes);
   const notes: StoredNote[] = (data.notes ?? [])
@@ -227,7 +239,16 @@ async function apiGet(): Promise<AllData> {
     }))
     .filter((n: StoredNote) => n.id && n.jugador);
 
-  return { callUps, sessions, minutes, minutesSupported, recovery, recoverySupported, notes, notesSupported };
+  return {
+    callUps,
+    sessions,
+    minutes,
+    minutesSupported,
+    recovery,
+    recoverySupported,
+    notes,
+    notesSupported,
+  };
 }
 
 async function apiPost(
@@ -235,6 +256,8 @@ async function apiPost(
   entity: "callup" | "session" | "response" | "minutes" | "note",
   data: object,
 ): Promise<Record<string, unknown>> {
+  // Sin conexión no se envía nada (nunca se encola ni se reintenta solo)
+  if (isOffline()) throw new Error(OFFLINE_SAVE_MSG);
   const res = await fetch(getAppsScriptUrl(), {
     method: "POST",
     headers: {
@@ -327,7 +350,11 @@ export async function saveCallUp(callUp: Omit<StoredCallUp, "id">): Promise<Stor
   return item;
 }
 
-export async function updateCallUp(id: string, patch: Partial<StoredCallUp>, current: StoredCallUp): Promise<void> {
+export async function updateCallUp(
+  id: string,
+  patch: Partial<StoredCallUp>,
+  current: StoredCallUp,
+): Promise<void> {
   const updated = { ...current, ...patch };
   await apiPost("upsert", "callup", {
     id: updated.id,
@@ -389,7 +416,6 @@ export async function deletePlayerResponse(data: {
 }): Promise<void> {
   await apiPost("delete", "response", { jugador: data.jugador, fecha: data.fecha });
 }
-
 
 /** Human-readable label for a session */
 export function sessionLabel(s: StoredSession): string {
