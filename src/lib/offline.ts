@@ -102,28 +102,47 @@ function scheduleRetry() {
   }, RETRY_MS);
 }
 
-async function saveCopy(json: unknown) {
+/**
+ * Clave de la copia: una para "todos los datos" y otra por convocatoria
+ * (?convocatoria=ID); "fresh=1" no cuenta, es la misma lectura sin caché.
+ */
+function copyKey(url: string) {
+  try {
+    const conv = new URL(url).searchParams.get("convocatoria");
+    return conv ? `${KEY_URL}?convocatoria=${encodeURIComponent(conv)}` : KEY_URL;
+  } catch {
+    return KEY_URL;
+  }
+}
+
+async function saveCopy(url: string, json: unknown) {
   try {
     const c = await caches.open(CACHE);
+    const key = copyKey(url);
     await c.put(
-      KEY_URL,
+      key,
       new Response(JSON.stringify(json), { headers: { "Content-Type": "application/json" } }),
     );
+    localStorage.setItem(`${KEY_SAVED_AT}:${key}`, String(Date.now()));
     localStorage.setItem(KEY_SAVED_AT, String(Date.now()));
   } catch {
     /* sin Cache API o sin espacio: la app sigue funcionando sin copia */
   }
 }
 
-async function readCopy(): Promise<{ json: unknown; savedAt: number | null } | null> {
+async function readCopy(url: string): Promise<{ json: unknown; savedAt: number | null } | null> {
   try {
     const c = await caches.open(CACHE);
-    const r = await c.match(KEY_URL);
+    const key = copyKey(url);
+    const r = await c.match(key);
     if (!r) return null;
     const json = await r.json();
     let savedAt: number | null = null;
     try {
-      savedAt = Number(localStorage.getItem(KEY_SAVED_AT)) || null;
+      savedAt =
+        Number(localStorage.getItem(`${KEY_SAVED_AT}:${key}`)) ||
+        Number(localStorage.getItem(KEY_SAVED_AT)) ||
+        null;
     } catch {
       /* sin almacenamiento */
     }
@@ -156,12 +175,12 @@ export function fetchAppsScriptJson<T = Record<string, unknown>>(url: string): P
       }
       if (!res.ok) throw new Error(`Apps Script GET falló: HTTP ${res.status}`);
       const json = await res.json();
-      void saveCopy(json);
+      void saveCopy(url, json);
       retries = 0;
       set({ usingSaved: false, savedAt: null, online: true });
       return json as T;
     } catch (e) {
-      const copy = await readCopy();
+      const copy = await readCopy(url);
       if (copy) {
         console.warn("[datos] No se pudo leer el Google Sheet; se usa la copia guardada:", e);
         set({ usingSaved: true, savedAt: copy.savedAt });
