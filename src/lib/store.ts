@@ -1,7 +1,8 @@
 /**
  * Sheets Store. Los datos se leen de la Google Apps Script Web App; la última
  * lectura correcta se guarda para poder verla sin conexión (ver ./offline.ts).
- * Todas las operaciones van directamente a la Google Apps Script Web App.
+ * La lectura puede pedirse por convocatoria y el Apps Script guarda 5 min una copia
+ * en caché (se invalida al guardar; "Sincronizar" la salta con fresh=1).
  *
  * Hoja "Convocatorias": id | nombre | fechaInicio | fechaFin | sede | estado | notas
  * Hoja "Sesiones":      id | convocatoriaId | fecha | diaLabel | tipo | duracion
@@ -10,6 +11,7 @@
 import { parseToIsoDate, formatDateShort } from "./date-utils";
 import { getAppsScriptUrl } from "./config";
 import { fetchAppsScriptJson, isOffline, OFFLINE_SAVE_MSG } from "./offline";
+import { mapScriptResponses, type FormResponse } from "./sheets-service";
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── ⚙️ Umbrales de carga ─────────────────────────────────────────────────────
@@ -165,12 +167,44 @@ interface AllData {
   notes: StoredNote[];
   /** false si el Apps Script desplegado todavía no conoce la hoja "Notas" */
   notesSupported: boolean;
+  /** Respuestas del formulario incluidas en la misma petición (null: Apps Script antiguo) */
+  responses: FormResponse[] | null;
+  /** true si el Apps Script ha respondido con su copia en caché */
+  fromCache: boolean;
+  /** Milisegundos de cada lectura en el Apps Script (si los da) */
+  serverTimes?: Record<string, number>;
 }
 
-async function apiGet(): Promise<AllData> {
+export interface FetchOptions {
+  /** Solo los datos de esta convocatoria (la lista de convocatorias va completa) */
+  callUpId?: string;
+  /** Leer la hoja sin usar la copia en caché del Apps Script ("Sincronizar") */
+  fresh?: boolean;
+}
+
+// Peticiones en curso: pulsar varias veces o montar dos vistas a la vez no repite la petición
+const inflight = new Map<string, Promise<AllData>>();
+
+function apiGet(opts: FetchOptions = {}): Promise<AllData> {
+  const url = new URL(getAppsScriptUrl());
+  if (opts.callUpId) url.searchParams.set("convocatoria", opts.callUpId);
+  if (opts.fresh) url.searchParams.set("fresh", "1");
+  const key = url.toString();
+  const running = inflight.get(key);
+  if (running) return running;
+  const p = apiGetUrl(key).finally(() => inflight.delete(key));
+  inflight.set(key, p);
+  return p;
+}
+
+async function apiGetUrl(url: string): Promise<AllData> {
+  const label = `[sync] GET ${url.includes("convocatoria=") ? "convocatoria" : "todo"} ${Date.now()}`;
+  console.time(label);
   // Con copia sin conexión: si no hay red, se usan los últimos datos guardados
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data = await fetchAppsScriptJson<Record<string, any>>(getAppsScriptUrl());
+  const data = await fetchAppsScriptJson<Record<string, any>>(url);
+  console.timeEnd(label);
+  if (data.tiempos) console.info("[sync] tiempos en el Apps Script (ms):", data.tiempos, data.desdeCache ? "(caché)" : "");
 
   const callUps: StoredCallUp[] = (data.callUps ?? [])
     .map((r: Record<string, string>) => ({
@@ -239,6 +273,8 @@ async function apiGet(): Promise<AllData> {
     }))
     .filter((n: StoredNote) => n.id && n.jugador);
 
+  const responses = Array.isArray(data.responses) ? mapScriptResponses(data.responses) : null;
+
   return {
     callUps,
     sessions,
@@ -248,12 +284,15 @@ async function apiGet(): Promise<AllData> {
     recoverySupported,
     notes,
     notesSupported,
+    responses,
+    fromCache: !!data.desdeCache,
+    serverTimes: data.tiempos,
   };
 }
 
 async function apiPost(
-  action: "upsert" | "delete",
-  entity: "callup" | "session" | "response" | "minutes" | "note",
+  action: "upsert" | "delete" | "batch",
+  entity: "callup" | "session" | "response" | "responses" | "minutes" | "note",
   data: object,
 ): Promise<Record<string, unknown>> {
   // Sin conexión no se envía nada (nunca se encola ni se reintenta solo)
@@ -273,8 +312,8 @@ async function apiPost(
 
 // ─── Fetch all data ───────────────────────────────────────────────────────────
 
-export async function fetchAllData(): Promise<AllData> {
-  return apiGet();
+export async function fetchAllData(opts: FetchOptions = {}): Promise<AllData> {
+  return apiGet(opts);
 }
 
 // ─── Notas del cuerpo técnico ─────────────────────────────────────────────────
@@ -408,6 +447,51 @@ export async function savePlayerResponse(data: {
   rpe: number;
 }): Promise<void> {
   await apiPost("upsert", "response", data);
+}
+
+/** Un cambio de la edición en bloque (ver batchResponses_ en el Apps Script) */
+export interface ResponseChange {
+  jugador: string;
+  fecha: string;
+  fatigue?: number;
+  rpe?: number;
+  /** Respuesta existente: fila de la hoja y/o marca temporal */
+  fila?: number;
+  timestamp?: string;
+  /** Respuesta nueva: marca temporal que la coloca en su sesión */
+  marcaTemporal?: string;
+  borrar?: boolean;
+}
+
+export interface BatchResult {
+  /** Resultado de cada cambio, en el mismo orden */
+  results: { i: number; ok: boolean; error?: string }[];
+  /** Respuestas del rango ya actualizadas (para no recargar todo) */
+  responses: FormResponse[] | null;
+}
+
+/**
+ * Guarda varios cambios de respuestas en UNA petición. `desde`/`hasta` (aaaa-mm-dd):
+ * rango del que el Apps Script devuelve las respuestas actualizadas.
+ */
+export async function saveResponsesBatch(
+  rows: ResponseChange[],
+  rango?: { desde: string; hasta: string },
+): Promise<BatchResult> {
+  let res: Record<string, unknown>;
+  try {
+    res = await apiPost("batch", "responses", { rows, ...rango });
+  } catch (e) {
+    if (/Entidad no reconocida/.test(String(e)))
+      throw new Error(
+        "El Apps Script publicado no admite guardar en bloque: publica la nueva versión de Code.gs.",
+      );
+    throw e;
+  }
+  return {
+    results: (res.results as BatchResult["results"]) ?? rows.map((_, i) => ({ i, ok: true })),
+    responses: Array.isArray(res.responses) ? mapScriptResponses(res.responses) : null,
+  };
 }
 
 export async function deletePlayerResponse(data: {

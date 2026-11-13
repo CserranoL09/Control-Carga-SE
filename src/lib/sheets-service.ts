@@ -20,6 +20,8 @@ export interface FormResponse {
   fatigue: number; // 1-10
   rpe: number; // 1-10
   fecha: string; // ISO date yyyy-mm-dd
+  /** Fila de la hoja del Form (para editar o borrar exactamente esta respuesta) */
+  fila?: number;
 }
 
 // In-memory cache
@@ -118,15 +120,7 @@ export async function fetchFormResponses(forceRefresh = false): Promise<FormResp
       const json = await fetchAppsScriptJson<Record<string, unknown>>(getAppsScriptUrl());
       {
         if (Array.isArray(json.responses)) {
-          _cache = (json.responses as FormResponse[])
-            .map((r) => ({
-              timestamp: String(r.timestamp ?? ""),
-              jugador: String(r.jugador ?? "").trim(),
-              fatigue: Math.max(0, Math.min(10, Math.round(Number(r.fatigue) || 0))),
-              rpe: Math.max(0, Math.min(10, Math.round(Number(r.rpe) || 0))),
-              fecha: parseDate(String(r.fecha ?? "")),
-            }))
-            .filter((r) => r.jugador && r.fecha);
+          _cache = mapScriptResponses(json.responses);
           _cacheAt = Date.now();
           return _cache;
         }
@@ -146,6 +140,26 @@ export async function fetchFormResponses(forceRefresh = false): Promise<FormResp
     console.warn("[sheets-service] Fetch failed, using cached data:", err);
     return _cache ?? [];
   }
+}
+
+/**
+ * Respuestas tal como las devuelve el Apps Script → FormResponse (valores 0–10, fecha
+ * ISO, fila de la hoja).
+ */
+export function mapScriptResponses(raw: unknown[]): FormResponse[] {
+  return (raw as Partial<FormResponse>[])
+    .map((r) => {
+      return {
+        timestamp: String(r.timestamp ?? ""),
+        jugador: String(r.jugador ?? "").trim(),
+        fatigue: Math.max(0, Math.min(10, Math.round(Number(r.fatigue) || 0))),
+        rpe: Math.max(0, Math.min(10, Math.round(Number(r.rpe) || 0))),
+        fecha: parseDate(String(r.fecha ?? "")),
+        // fila de la hoja: permite editar o borrar exactamente esta respuesta
+        fila: Number(r.fila) || undefined,
+      };
+    })
+    .filter((r) => r.jugador && r.fecha);
 }
 
 /**
