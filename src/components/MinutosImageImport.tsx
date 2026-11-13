@@ -208,7 +208,9 @@ export function MinutosImageImport({
     } catch (e) {
       if (e instanceof Error && e.message === "cancelado") return;
       setError(
-        `No se pudo leer la imagen (${e instanceof Error ? e.message : e}). Comprueba la conexión: la primera vez se descarga el diccionario de español.`,
+        !navigator.onLine
+          ? "La lectura de imágenes necesita conexión la primera vez. Cuando la hayas usado una vez con conexión, funcionará también sin ella."
+          : `No se pudo leer la imagen (${e instanceof Error ? e.message : e}). Comprueba la conexión: la primera vez se descarga el diccionario de español.`,
       );
       setPhase("error");
     }

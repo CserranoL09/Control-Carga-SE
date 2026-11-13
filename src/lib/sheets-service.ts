@@ -12,13 +12,14 @@
 
 import { parseToIsoDate } from "./date-utils";
 import { getSheetsCsvUrl, getAppsScriptUrl } from "./config";
+import { fetchAppsScriptJson } from "./offline";
 
 export interface FormResponse {
-  timestamp: string;  // raw "Marca temporal"
-  jugador: string;    // player name as typed
-  fatigue: number;    // 1-10
-  rpe: number;        // 1-10
-  fecha: string;      // ISO date yyyy-mm-dd
+  timestamp: string; // raw "Marca temporal"
+  jugador: string; // player name as typed
+  fatigue: number; // 1-10
+  rpe: number; // 1-10
+  fecha: string; // ISO date yyyy-mm-dd
 }
 
 // In-memory cache
@@ -43,7 +44,10 @@ function parseNumber(raw: string): number {
 }
 
 function parseCsv(text: string): FormResponse[] {
-  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
   if (lines.length < 2) return [];
 
   // Skip header row
@@ -111,9 +115,8 @@ export async function fetchFormResponses(forceRefresh = false): Promise<FormResp
   try {
     // 1. Preferred: responses served by the Apps Script (same Sheet as call-ups/sessions)
     try {
-      const res = await fetch(getAppsScriptUrl(), { cache: "no-cache" });
-      if (res.ok) {
-        const json = await res.json();
+      const json = await fetchAppsScriptJson<Record<string, unknown>>(getAppsScriptUrl());
+      {
         if (Array.isArray(json.responses)) {
           _cache = (json.responses as FormResponse[])
             .map((r) => ({
