@@ -60,6 +60,10 @@ export interface SessionMetrics {
   playerFatigue: Record<string, number>;
   /** Per-player RPE */
   playerRPE: Record<string, number>;
+  /** Respuesta de cada jugador en la hoja (para editarla o borrarla exactamente) */
+  playerRef: Record<string, { fila?: number; timestamp: string }>;
+  /** Posición de la sesión en su día (0 = primera) y nº de sesiones ese día */
+  slot: { index: number; total: number };
 }
 
 /**
@@ -68,7 +72,15 @@ export interface SessionMetrics {
  */
 export function parseTimestampToMs(ts: string): number {
   if (!ts) return 0;
-  const trimmed = ts.trim();
+  // "5/11/2026, 16:54:00" (con coma) → sin coma
+  const trimmed = ts.trim().replace(/^(\d{1,2}\/\d{1,2}\/\d{4}),\s*/, "$1 ");
+  // ISO con hora ("2026-11-05T15:54:00.000Z"): lo que devuelve el Apps Script para las
+  // celdas de fecha. Sin esto quedaban a medianoche y las respuestas nuevas añadidas
+  // desde la app se ordenaban mal respecto a las del Form.
+  if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) {
+    const ms = Date.parse(trimmed);
+    if (!Number.isNaN(ms)) return ms;
+  }
   // 1. dd/mm/yyyy hh:mm:ss or d/m/yyyy h:m:s
   const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
   if (slashMatch) {
@@ -137,6 +149,7 @@ export function calcSessionMetrics(
     const playerRpeUA: Record<string, number> = {};
     const playerFatigue: Record<string, number> = {};
     const playerRPE: Record<string, number> = {};
+    const playerRef: SessionMetrics["playerRef"] = {};
 
     // Group responses of this day by player
     const dayResponses = responses.filter((r) => r.fecha === s.date);
@@ -165,6 +178,7 @@ export function calcSessionMetrics(
       playerRPE[r.jugador] = r.rpe;
       playerUA[r.jugador] = r.fatigue * s.duration;
       playerRpeUA[r.jugador] = r.rpe * s.duration;
+      playerRef[r.jugador] = { fila: r.fila, timestamp: r.timestamp };
     }
 
     const fatigues = matchedResponses.map((r) => r.fatigue);
@@ -189,6 +203,8 @@ export function calcSessionMetrics(
       playerRpeUA,
       playerFatigue,
       playerRPE,
+      playerRef,
+      slot: { index: sessionIndex, total: daySessions.length },
     };
   });
 }

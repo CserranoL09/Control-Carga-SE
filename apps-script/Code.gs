@@ -15,7 +15,7 @@ const SHEET_RESPONSES = "Respuestas de formulario 1"; // Hoja de respuestas del 
 const SHEET_CALLUPS   = "Convocatorias";              // Hoja de convocatorias
 const SHEET_SESSIONS  = "Sesiones";                   // Hoja de sesiones
 const SHEET_MINUTES   = "Minutos";                    // Hoja de minutos de juego (se crea sola)
-const MINUTES_HEADERS = ["id", "convocatoriaId", "sesionId", "fecha", "jugador", "minutos"];
+const MINUTES_HEADERS = ["id", "convocatoriaId", "sesionId", "fecha", "jugador", "minutos", "minutos1", "minutos2"];
 const SHEET_NOTES     = "Notas";                      // Observaciones del cuerpo técnico (se crea sola)
 const NOTES_HEADERS   = ["id", "convocatoriaId", "jugador", "orden", "titulo", "texto", "enInforme", "actualizado"];
 
@@ -70,27 +70,116 @@ function getOrCreateSheet(sheetName, defaultHeaders) {
 // ─── GET: devuelve todas las convocatorias y sesiones ─────────
 
 function doGet(e) {
-  const callUps = sheetToObjects(SHEET_CALLUPS);
-  const sessions = sheetToObjects(SHEET_SESSIONS);
-  const minutes = readMinutes();
-  const notes = sheetToObjects(SHEET_NOTES);
-  const recovery = readRecovery();
+  const p = (e && e.parameter) || {};
+  const conv = String(p.convocatoria || "");
+  const fresh = p.fresh === "1";
+  const key = "get:" + dataVersion_() + ":" + (conv || "todo");
+
+  // Copia en caché (5 min, se invalida al guardar cualquier cosa). "Sincronizar" pide fresh=1.
+  if (!fresh) {
+    const hit = cacheGet_(key);
+    if (hit) return textJson_('{"desdeCache":true,' + hit.slice(1));
+  }
+  const payload = JSON.stringify(buildPayload_(conv));
+  cachePut_(key, payload);
+  return textJson_(payload);
+}
+
+/**
+ * Datos para la app. Con `conv` (id de convocatoria) solo devuelve las sesiones, minutos,
+ * notas, recuperación y respuestas de esa convocatoria (las respuestas con un día de
+ * margen por cada lado: la app ajusta la fecha de las que no la traen). La lista de
+ * convocatorias va siempre completa.
+ */
+function buildPayload_(conv) {
+  const t = {};
+  let t0 = Date.now();
+  const lap = function (name) { const now = Date.now(); t[name] = now - t0; t0 = now; };
+
+  const callUps = sheetToObjects(SHEET_CALLUPS); lap("convocatorias");
+  const cu = conv ? callUps.filter(function (c) { return c.id === conv; })[0] : null;
+  const desde = cu ? shiftIso_(parseIsoDate(cu.fechaInicio), -1) : "";
+  const hasta = cu ? shiftIso_(parseIsoDate(cu.fechaFin), 1) : "";
+  const inRange = function (f) { return !cu || (f >= desde && f <= hasta); };
+
+  let sessions = sheetToObjects(SHEET_SESSIONS); lap("sesiones");
+  if (cu) sessions = sessions.filter(function (s) { return s.convocatoriaId === conv; });
+  let minutes = readMinutes(); lap("minutos");
+  if (cu) minutes = minutes.filter(function (m) { return m.convocatoriaId === conv; });
+  let notes = sheetToObjects(SHEET_NOTES); lap("notas");
+  if (cu) notes = notes.filter(function (n) { return n.convocatoriaId === conv; });
+  const recovery = readRecovery().filter(function (r) { return inRange(r.fecha); }); lap("recuperacion");
   const responsesSheet = getResponsesSheet();
+  const responses = readResponses(responsesSheet).filter(function (r) { return inRange(r.fecha); }); lap("respuestas");
 
-  const payload = JSON.stringify({
+  return {
     ok: true,
-    callUps,
-    sessions,
-    minutes,
-    notes,
-    recovery,
-    responses: readResponses(responsesSheet),
-    responsesSheetName: responsesSheet ? responsesSheet.getName() : null
-  });
+    callUps: callUps,
+    sessions: sessions,
+    minutes: minutes,
+    notes: notes,
+    recovery: recovery,
+    responses: responses,
+    responsesSheetName: responsesSheet ? responsesSheet.getName() : null,
+    convocatoria: cu ? conv : null,
+    generado: new Date().toISOString(),
+    tiempos: t
+  };
+}
 
-  return ContentService
-    .createTextOutput(payload)
-    .setMimeType(ContentService.MimeType.JSON);
+function textJson_(text) {
+  return ContentService.createTextOutput(text).setMimeType(ContentService.MimeType.JSON);
+}
+
+/** aaaa-mm-dd ± días */
+function shiftIso_(iso, days) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const d = new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10) + days));
+  return d.toISOString().slice(0, 10);
+}
+
+// ─── Caché de lectura ─────────────────────────────────────────
+
+/** Versión de los datos: cambia con cada guardado, así la caché anterior deja de usarse */
+function dataVersion_() {
+  return PropertiesService.getScriptProperties().getProperty("dataVersion") || "0";
+}
+function bumpDataVersion_() {
+  PropertiesService.getScriptProperties().setProperty("dataVersion", String(Date.now()));
+}
+
+const CACHE_CHUNK = 40000; // caracteres por trozo (CacheService admite 100 KB por clave)
+
+function cachePut_(key, text) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const parts = {};
+    const n = Math.ceil(text.length / CACHE_CHUNK);
+    for (let i = 0; i < n; i++) parts[key + ":" + i] = text.slice(i * CACHE_CHUNK, (i + 1) * CACHE_CHUNK);
+    parts[key + ":n"] = String(n);
+    cache.putAll(parts, 300); // 5 minutos
+  } catch (err) {
+    console.warn("cachePut_: " + err); // demasiado grande o sin caché: se sigue sin ella
+  }
+}
+
+function cacheGet_(key) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const n = Number(cache.get(key + ":n"));
+    if (!n) return null;
+    const keys = [];
+    for (let i = 0; i < n; i++) keys.push(key + ":" + i);
+    const parts = cache.getAll(keys);
+    let text = "";
+    for (let i = 0; i < n; i++) {
+      if (parts[keys[i]] == null) return null;
+      text += parts[keys[i]];
+    }
+    return text;
+  } catch (err) {
+    return null;
+  }
 }
 
 
@@ -105,8 +194,33 @@ function doPost(e) {
   }
 
   const { action, entity, data } = body;
-  // action: "upsert" | "delete"
-  // entity: "callup" | "session" | "response"
+
+  // Cualquier guardado deja obsoleta la copia en caché de la lectura
+  bumpDataVersion_();
+
+  // 0. Varias respuestas de una vez (edición en bloque desde Resumen)
+  if (entity === "responses" && action === "batch") {
+    const sheet = getResponsesSheet((data && data.sheetName) || body.sheetName);
+    if (!sheet) return jsonResponse({ ok: false, error: "No se encontró la hoja de respuestas del formulario" });
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(20000)) return jsonResponse({ ok: false, error: "La hoja está ocupada con otro guardado. Inténtalo de nuevo." });
+    try {
+      const results = batchResponses_(sheet, (data && data.rows) || []);
+      const out = { ok: true, results: results };
+      // Respuestas actualizadas del rango, para que la app no tenga que recargar todo
+      if (data && data.desde && data.hasta) {
+        // con un día de margen, igual que en la lectura (la app ajusta las que no traen fecha)
+        const desde = shiftIso_(data.desde, -1), hasta = shiftIso_(data.hasta, 1);
+        out.responses = readResponses(sheet).filter(function (r) {
+          return r.fecha >= desde && r.fecha <= hasta;
+        });
+      }
+      return jsonResponse(out);
+    } finally {
+      lock.releaseLock();
+    }
+  }
+  // Resto: action "upsert" | "delete"; entity "callup" | "session" | "response" | "minutes" | "note"
 
   // 1. Manejo de Respuestas de Jugadores (Google Form)
   if (entity === "response") {
@@ -127,14 +241,20 @@ function doPost(e) {
   }
 
   // 2. Minutos de juego (entrada manual desde la app)
-  //    data.rows = [{ id, convocatoriaId, sesionId, fecha, jugador, minutos }]
-  //    Una fila con "minutos" vacío se elimina.
+  //    data.rows = [{ id, convocatoriaId, sesionId, fecha, jugador, minutos, minutos1, minutos2 }]
+  //    minutos = total del partido. Si llega alguna parte, total = 1ª + 2ª.
+  //    Una fila con total, 1ª y 2ª vacíos se elimina.
   if (entity === "minutes") {
     const sheet = getMinutesSheet();
     const rows = (data && data.rows) || [];
     rows.forEach(function (r) {
       if (!r || !r.id) return;
-      const value = toMinutesNumber(r.minutos);
+      const m1 = toMinutesNumber(r.minutos1);
+      const m2 = toMinutesNumber(r.minutos2);
+      const hasParts = m1 !== null || m2 !== null;
+      const value = hasParts
+        ? Math.round(((m1 || 0) + (m2 || 0)) * 100) / 100
+        : toMinutesNumber(r.minutos);
       if (value === null) {
         deleteRow(sheet, r.id);
       } else {
@@ -146,7 +266,9 @@ function doPost(e) {
           sesionId: String(r.sesionId || ""),
           fecha: String(r.fecha || ""),
           jugador: String(r.jugador || ""),
-          minutos: value
+          minutos: value,
+          minutos1: m1 === null ? "" : m1,
+          minutos2: m2 === null ? "" : m2
         });
       }
     });
@@ -221,8 +343,18 @@ function getNotesSheet() {
  */
 function getMinutesSheet() {
   const sheet = getOrCreateSheet(SHEET_MINUTES, MINUTES_HEADERS);
+  // Hojas creadas con la versión anterior: añadir "minutos1" y "minutos2" al final
+  // (G1 y H1) sin mover ni borrar nada.
+  const lastCol = Math.max(sheet.getLastColumn(), 1);
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+  ["minutos1", "minutos2"].forEach(function (h) {
+    if (headers.indexOf(h) === -1) {
+      headers.push(h);
+      sheet.getRange(1, headers.length).setValue(h);
+    }
+  });
   sheet.getRange("A:E").setNumberFormat("@");
-  sheet.getRange("F:F").setNumberFormat("0.00");
+  sheet.getRange("F:H").setNumberFormat("0.00");
   return sheet;
 }
 
@@ -261,7 +393,9 @@ function readMinutes() {
       sesionId: String(r[col("sesionId")] || ""),
       fecha: fechaRaw instanceof Date ? parseIsoDate(fechaRaw) : String(fechaRaw || ""),
       jugador: String(r[col("jugador")] || "").trim(),
-      minutos: minutos
+      minutos: minutos,
+      minutos1: col("minutos1") === -1 ? null : toMinutesNumber(r[col("minutos1")]),
+      minutos2: col("minutos2") === -1 ? null : toMinutesNumber(r[col("minutos2")])
     });
   }
   return out;
@@ -416,7 +550,8 @@ function readResponses(sheet) {
     const fecha = parseIsoDate(r[fCol]) || parseIsoDate(r[0]);
     if (!jugador || !fecha) continue;
     out.push({
-      timestamp: r[0] instanceof Date ? r[0].toISOString() : String(r[0] || ""),
+      timestamp: tsKey_(r[0]),
+      fila: i + 1, // fila de la hoja: permite editar o borrar exactamente esta respuesta
       jugador: jugador,
       fatigue: Number(String(r[fatCol]).replace(",", ".")) || 0,
       rpe: Number(String(r[rpeCol]).replace(",", ".")) || 0,
@@ -584,4 +719,123 @@ function jsonResponse(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ─── Helpers: respuestas del Form ─────────────────────────────────────────────
+
+/** Marca temporal tal como la devuelve readResponses (para identificar una fila) */
+function tsKey_(v) {
+  return v instanceof Date ? v.toISOString() : String(v || "");
+}
+
+/** Nombre sin tildes, mayúsculas ni espacios extra */
+function normName_(s) {
+  return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+}
+
+/** Hora actual en formato fijo "dd/MM/yyyy HH:mm:ss" con la zona horaria del script */
+function nowStamp_() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
+}
+
+/**
+ * Marca temporal como TEXTO (el apóstrofo no se ve en la celda): así Sheets no la
+ * reinterpreta con su configuración regional (p. ej. 05/11 como 11 de mayo).
+ */
+function stampText_(s) {
+  return "'" + String(s);
+}
+
+/**
+ * Índice (en `values`) de la respuesta exacta de un jugador: por `fila` (comprobando que
+ * sigue siendo del mismo jugador y fecha) o por su marca temporal. -1 si no está.
+ */
+function findResponseRow_(values, jCol, fCol, data) {
+  const player = normName_(data.jugador);
+  const date = String(data.fecha || "").trim();
+  const same = function (i) {
+    const row = values[i];
+    return !!row && normName_(row[jCol - 1]) === player && parseIsoDate(row[fCol - 1]) === date;
+  };
+  if (data.fila) {
+    const i = Number(data.fila) - 1;
+    if (i >= 1 && same(i)) return i;
+  }
+  if (data.timestamp) {
+    for (let i = 1; i < values.length; i++) {
+      if (same(i) && tsKey_(values[i][0]) === String(data.timestamp)) return i;
+    }
+  }
+  return -1;
+}
+
+/** Columnas (1-based) de la hoja de respuestas a partir de las cabeceras */
+function responseCols_(headers) {
+  const find = function (pred, fallback) {
+    const i = headers.findIndex(function (h) { return pred(String(h || "").toLowerCase()); });
+    return i >= 0 ? i + 1 : fallback;
+  };
+  return {
+    j: find(function (l) { return l.includes("jugador") || l.includes("nombre") || l.includes("player"); }, 2),
+    f: find(function (l) { return l.includes("fecha") || l.includes("date"); }, 5),
+    fat: find(function (l) { return l.includes("sientes") || l.includes("fatiga") || l.includes("fatigue") || l.includes("recuperaci"); }, 3),
+    rpe: find(function (l) { return l.includes("intenso") || l.includes("intensidad") || l.includes("rpe") || l.includes("esfuerzo"); }, 4)
+  };
+}
+
+/**
+ * Aplica varios cambios de respuestas con UNA lectura de la hoja:
+ *   { jugador, fecha, fatigue, rpe, fila?, timestamp?, marcaTemporal?, borrar? }
+ * - con fila/timestamp: edita (o borra, si borrar) esa respuesta exacta;
+ * - sin ellos: añade una fila nueva con su marca temporal.
+ * Devuelve [{ i, ok, error? }] en el mismo orden.
+ */
+function batchResponses_(sheet, rows) {
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0] || ["Marca temporal", "JUGADOR", "Fatiga", "RPE", "Fecha"];
+  const c = responseCols_(headers);
+  const width = Math.max(headers.length, c.j, c.f, c.fat, c.rpe);
+  const results = [];
+  const updates = [];
+  const deletes = [];
+  const appends = [];
+  const used = {};
+
+  rows.forEach(function (r, i) {
+    try {
+      if (r.fila || r.timestamp) {
+        const idx = findResponseRow_(values, c.j, c.f, r);
+        if (idx < 1 || used[idx]) throw new Error("No se encontró la respuesta (la hoja ha cambiado). Recarga la app.");
+        used[idx] = true;
+        if (r.borrar) deletes.push(idx);
+        else updates.push({ idx: idx, fatigue: r.fatigue, rpe: r.rpe });
+      } else {
+        if (r.borrar) throw new Error("No hay respuesta que borrar");
+        const row = new Array(width).fill("");
+        row[0] = stampText_(r.marcaTemporal || nowStamp_());
+        row[c.j - 1] = r.jugador;
+        row[c.fat - 1] = r.fatigue;
+        row[c.rpe - 1] = r.rpe;
+        row[c.f - 1] = r.fecha;
+        appends.push(row);
+      }
+      results.push({ i: i, ok: true });
+    } catch (err) {
+      results.push({ i: i, ok: false, error: String(err.message || err) });
+    }
+  });
+
+  // 1. Ediciones (fatiga y RPE juntas si están en columnas seguidas)
+  updates.forEach(function (u) {
+    if (c.rpe === c.fat + 1) sheet.getRange(u.idx + 1, c.fat, 1, 2).setValues([[u.fatigue, u.rpe]]);
+    else {
+      sheet.getRange(u.idx + 1, c.fat).setValue(u.fatigue);
+      sheet.getRange(u.idx + 1, c.rpe).setValue(u.rpe);
+    }
+  });
+  // 2. Borrados, de abajo hacia arriba para no desplazar las filas pendientes
+  deletes.sort(function (a, b) { return b - a; }).forEach(function (idx) { sheet.deleteRow(idx + 1); });
+  // 3. Filas nuevas, todas de una vez al final
+  if (appends.length) sheet.getRange(sheet.getLastRow() + 1, 1, appends.length, width).setValues(appends);
+  return results;
 }

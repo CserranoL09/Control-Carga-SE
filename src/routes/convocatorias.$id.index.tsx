@@ -83,6 +83,7 @@ import { DashboardTab } from "@/components/dashboard/DashboardTab";
 import { formatMinutes, playerMinutesSummary } from "@/lib/minutes";
 import { samePlayer, type StoredMinutes } from "@/lib/store";
 import { players as allPlayers } from "@/lib/mock-data";
+import { BulkResponseEditor } from "@/components/BulkResponseEditor";
 
 const normalizeName = (name: string) =>
   name
@@ -130,9 +131,18 @@ export default function ConvocatoriaPage() {
     loading,
     error,
     refresh,
+    refreshQuiet,
+    syncing,
+    lastSync,
+    applyServerResponses,
     updateResponseLocally,
     updateSessionLocally,
   } = useCallUpDashboard(id);
+  // Cambios sin guardar de la edición en bloque (Resumen)
+  const [bulkDirty, setBulkDirty] = useState(0);
+  const confirmLeave = () =>
+    bulkDirty === 0 ||
+    window.confirm(`Hay ${bulkDirty} cambios sin guardar en Resumen. ¿Salir sin guardarlos?`);
   const [tab, setTab] = useState<Tab>("resumen");
   const [sessionRefreshKey, setSessionRefreshKey] = useState(0);
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
@@ -144,8 +154,9 @@ export default function ConvocatoriaPage() {
     document.title = callUp ? `${callUp.name} · SE-FS Load` : "Convocatoria · SE-FS Load";
   }, [callUp]);
 
+  /** Tras guardar algo: actualizar en segundo plano, sin pantalla de carga */
   function refreshAll() {
-    refresh();
+    refreshQuiet();
     setSessionRefreshKey((k) => k + 1);
   }
 
@@ -364,13 +375,33 @@ export default function ConvocatoriaPage() {
               </button>
             )}
             {callUp && <EditarConvocatoriaDialog callUp={callUp} onUpdated={refreshAll} />}
-            <button
-              onClick={refreshAll}
-              className="text-xs flex items-center gap-1.5 px-3 py-2 rounded-md border hover:bg-accent"
-              title="Refrescar datos del formulario"
-            >
-              <RefreshCw className="size-3.5" /> Sincronizar
-            </button>
+            <div className="flex flex-col items-end">
+              <button
+                onClick={() => {
+                  if (!confirmLeave()) return;
+                  refresh();
+                  setSessionRefreshKey((k) => k + 1);
+                }}
+                disabled={syncing}
+                className="text-xs flex items-center gap-1.5 px-3 py-2 rounded-md border hover:bg-accent disabled:opacity-70"
+                title={
+                  lastSync
+                    ? `Última sincronización: ${new Date(lastSync.at).toLocaleString("es-ES")}${
+                        lastSync.local ? " (datos guardados en este navegador)" : ` · ${(lastSync.ms / 1000).toFixed(1)} s`
+                      }`
+                    : "Leer de nuevo los datos de Google Sheets"
+                }
+              >
+                <RefreshCw className={`size-3.5 ${syncing ? "animate-spin" : ""}`} />
+                {syncing ? "Sincronizando…" : "Sincronizar"}
+              </button>
+              {lastSync && (
+                <span className="mt-0.5 text-[10px] text-muted-foreground tabular-nums">
+                  {lastSync.local ? "Guardado " : "Actualizado "}
+                  {new Date(lastSync.at).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              )}
+            </div>
             {/* <button className="text-xs flex items-center gap-1.5 px-3 py-2 rounded-md border hover:bg-accent">
               <Download className="size-3.5" /> Exportar CSV
             </button> */}
@@ -391,7 +422,10 @@ export default function ConvocatoriaPage() {
                   key={t.id}
                   role="tab"
                   aria-selected={active}
-                  onClick={() => setTab(t.id)}
+                  onClick={() => {
+                    if (t.id !== tab && !confirmLeave()) return;
+                    setTab(t.id);
+                  }}
                   title={t.label}
                   className={`relative snap-start shrink-0 sm:shrink min-w-0 rounded-lg border px-2 py-2.5 text-center leading-tight font-medium whitespace-nowrap sm:whitespace-normal text-[13px] sm:text-[clamp(11px,1.25cqi,14px)] transition-all duration-200 ${
                     active
@@ -431,6 +465,9 @@ export default function ConvocatoriaPage() {
                 onResponseUpdated={refreshAll}
                 updateResponseLocally={updateResponseLocally}
                 updateSessionLocally={updateSessionLocally}
+                rango={{ desde: callUp.startDate, hasta: callUp.endDate }}
+                applyServerResponses={applyServerResponses}
+                onDirtyChange={setBulkDirty}
               />
             )}
             {tab === "sesiones" && callUp && (
@@ -784,7 +821,13 @@ function ResumenTab({
   onResponseUpdated,
   updateResponseLocally,
   updateSessionLocally,
+  rango,
+  applyServerResponses,
+  onDirtyChange,
 }: {
+  rango?: { desde: string; hasta: string };
+  applyServerResponses: ReturnType<typeof useCallUpDashboard>["applyServerResponses"];
+  onDirtyChange?: (n: number) => void;
   sessionMetrics: ReturnType<typeof useCallUpDashboard>["sessionMetrics"];
   acwrSeries: ReturnType<typeof useCallUpDashboard>["acwrSeries"];
   acwrSeriesRpe: ReturnType<typeof useCallUpDashboard>["acwrSeries"];
@@ -793,15 +836,11 @@ function ResumenTab({
   sessions: StoredSession[];
   onSessionUpdated?: () => void;
   onResponseUpdated?: () => void;
-  updateResponseLocally: (
-    jugador: string,
-    fecha: string,
-    fatigue: number | null,
-    rpe: number | null,
-  ) => void;
+  updateResponseLocally: ReturnType<typeof useCallUpDashboard>["updateResponseLocally"];
   updateSessionLocally: (sessionId: string, duration: number) => void;
 }) {
   const { optimo, moderado } = getLoadThresholds();
+  const [bulkEditing, setBulkEditing] = useState(false);
 
   // Exclude sessions with 0 duration for team summary metrics and charts
   const completedMetrics = sessionMetrics.filter((s) => s.duration > 0);
@@ -873,6 +912,7 @@ function ResumenTab({
       {/* Selector de vista: Fatiga / Carga */}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
+          {!bulkEditing && (
           <div
             className="inline-flex rounded-md border p-0.5 bg-muted/30"
             role="group"
@@ -894,12 +934,36 @@ function ResumenTab({
               </button>
             ))}
           </div>
-          {players.length > 0 && <CopyPNGButton targetId={`heatmap-${vista}-table`} />}
+          )}
+          {players.length > 0 && !bulkEditing && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBulkEditing(true)}
+                className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-md border hover:bg-accent"
+                title="Rellenar o corregir varias respuestas y guardarlas todas a la vez"
+              >
+                <Pencil className="size-3.5" /> Editar valores
+              </button>
+              <CopyPNGButton targetId={`heatmap-${vista}-table`} />
+            </div>
+          )}
         </div>
         {players.length === 0 ? (
           <p className="text-xs text-muted-foreground py-8 text-center border rounded-lg bg-card">
             Sin datos de formulario.
           </p>
+        ) : bulkEditing ? (
+          <BulkResponseEditor
+            players={players}
+            sessionMetrics={sessionMetrics}
+            rango={rango}
+            onClose={() => setBulkEditing(false)}
+            onDirtyChange={onDirtyChange}
+            applyServerResponses={applyServerResponses}
+            updateResponseLocally={updateResponseLocally}
+            refreshQuiet={() => onResponseUpdated?.()}
+          />
         ) : (
           <FatigaHeatmap
             key={vista}
